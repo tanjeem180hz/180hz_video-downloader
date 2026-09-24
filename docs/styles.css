@@ -435,14 +435,14 @@ body {
 .proto-cell::after { content: ""; position: absolute; bottom: 0; left: 0; height: 2px; width: 0; background: linear-gradient(90deg, var(--violet), var(--lime)); transition: width .5s; }
 .proto-cell:hover::after { width: 100%; }
 
-/* ---------- direct web download card ---------- */
-.direct-web-dl-card {
+/* ---------- desktop installer card ---------- */
+.desktop-installer-card {
   position: relative;
   overflow: hidden;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
   transition: all .25s ease;
 }
-.direct-web-dl-card:hover {
+.desktop-installer-card:hover {
   border-color: rgba(216,255,62,0.5);
 }
 

@@ -945,7 +945,7 @@ function nativeHandoff(url, filename) {
           if (r.isLocalBackend) {
             executeDownload(selectedFormat);
           } else {
-            renderDirectWebWidget(selectedFormat);
+            handleLaunchOrInstallDesktop(r.url);
           }
         };
 
@@ -991,8 +991,7 @@ function nativeHandoff(url, filename) {
       if (r.isLocalBackend) {
         togglePanel();
       } else {
-        renderDirectWebWidget(selectedFormat);
-        togglePanel();
+        handleLaunchOrInstallDesktop(r.url);
       }
     });
 
@@ -1138,24 +1137,10 @@ function nativeHandoff(url, filename) {
         btn.disabled = false;
         cancel.classList.add("hidden");
         fill.style.width = "100%";
-        text.textContent = "Direct Download Ready ✓";
-        renderDirectWebWidget(fmt);
+        text.textContent = "Download via App (.exe) ▼";
+        renderDesktopInstallerCard(fmt);
         Ledger.bump(r.url);
       }
-    }
-
-    function mapToDirectWebFormat(fmt) {
-      if (!fmt) return "1080";
-      if (fmt.audioOnly || fmt.formatId === "bestaudio" || fmt.container === "mp3") return "mp3";
-      const str = String(fmt.resolution || fmt.quality || fmt.formatId || "").toLowerCase();
-      if (str.includes("4320") || str.includes("8k")) return "8k";
-      if (str.includes("2160") || str.includes("4k")) return "4k";
-      if (str.includes("1440") || str.includes("2k")) return "1440";
-      if (str.includes("1080")) return "1080";
-      if (str.includes("720")) return "720";
-      if (str.includes("480")) return "480";
-      if (str.includes("360")) return "360";
-      return "1080";
     }
 
     async function handleLaunchOrInstallDesktop(mediaUrl) {
@@ -1185,74 +1170,36 @@ function nativeHandoff(url, filename) {
         a.click();
         document.body.removeChild(a);
 
-        showDesktopInstallerPrompt(mediaUrl);
+        renderDesktopInstallerCard(selectedFormat);
       }
     }
 
-    function showDesktopInstallerPrompt(mediaUrl) {
-      let existing = document.getElementById("turboInstallerNotice");
-      if (existing) existing.remove();
-
-      const banner = document.createElement("div");
-      banner.id = "turboInstallerNotice";
-      banner.style.cssText = "margin-top:14px;padding:14px 18px;background:rgba(124,92,255,0.14);border:1px solid rgba(124,92,255,0.45);border-radius:10px;font-size:12px;line-height:1.6;color:#edece8;animation:card-in .3s ease;";
-      banner.innerHTML = `
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px;">
-          <strong style="color:var(--lime);font-size:13px;display:flex;align-items:center;gap:6px;">
-            ${IC.zap} 1-Click Installer Started!
-          </strong>
-          <button type="button" onclick="this.parentElement.parentElement.remove()" style="background:transparent;border:none;color:#888;cursor:pointer;font-size:16px;">&times;</button>
-        </div>
-        <p style="margin:0 0 8px 0;">
-          <strong>TurboDownloaderSetup.exe</strong> has started downloading. Run it on your PC to enable full lossless 4K/8K downloading:
-        </p>
-        <ul style="margin:0 0 10px 18px;padding:0;color:rgba(237,237,232,0.85);font-size:11px;">
-          <li>⚡ <strong>Zero configuration:</strong> The installer automatically sets up yt-dlp & FFmpeg.</li>
-          <li>⚡ <strong>Desktop shortcut:</strong> Creates a shortcut on your Desktop and Start Menu.</li>
-          <li>⚡ <strong>Lossless 4K/8K:</strong> Directly merges bitstreams into your Downloads folder without quality loss.</li>
-        </ul>
-        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
-          <a href="TurboDownloaderSetup.exe" download="TurboDownloaderSetup.exe" class="chip" style="background:var(--lime);color:#000;font-weight:bold;font-size:11px;padding:4px 10px;text-decoration:none;border-radius:6px;">
-            Download Again (.exe)
-          </a>
-          <a href="http://127.0.0.1:4000/?url=${encodeURIComponent(mediaUrl)}" target="_blank" rel="noopener noreferrer" style="color:#c4b5fd;font-size:11px;text-decoration:underline;">
-            Already running? Open Desktop Engine
-          </a>
-        </div>
-      `;
-      const resultZone = document.getElementById("resultZone");
-      if (resultZone) {
-        resultZone.appendChild(banner);
-        banner.scrollIntoView({ behavior: "smooth", block: "nearest" });
-      }
-    }
-
-    function renderDirectWebWidget(fmt) {
-      const webFormat = mapToDirectWebFormat(fmt);
-      const widgetUrl = `https://loader.to/api/button/?url=${encodeURIComponent(r.url)}&f=${webFormat}`;
-      const formatLabel = fmt ? (fmt.label || getCanonicalResolution(fmt) || webFormat.toUpperCase()) : "1080p";
+    function renderDesktopInstallerCard(fmt) {
+      const formatLabel = fmt ? (fmt.label || getCanonicalResolution(fmt) || "Lossless 4K/8K") : "Lossless 4K/8K";
 
       errContainer.innerHTML = `
-        <div class="direct-web-dl-card" style="margin-top:16px;background:rgba(216,255,62,0.05);border:1px solid rgba(216,255,62,0.3);border-radius:12px;padding:16px;animation:card-in .4s ease;">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
+        <div class="desktop-installer-card" style="margin-top:16px;background:rgba(124,92,255,0.08);border:1px solid rgba(124,92,255,0.4);border-radius:12px;padding:18px;animation:card-in .4s ease;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
             <div style="display:flex;align-items:center;gap:8px;">
-              ${IC.dl}
-              <strong style="color:var(--lime);font-size:12px;letter-spacing:.12em;text-transform:uppercase;">DIRECT WEB DOWNLOAD READY</strong>
+              ${IC.zap}
+              <strong style="color:var(--lime);font-size:12px;letter-spacing:.12em;text-transform:uppercase;">LOSSLESS 4K/8K DESKTOP INSTALLER</strong>
             </div>
-            <span class="tag done" style="font-size:10px;">${escapeHtml(formatLabel)}</span>
+            <span class="tag done" style="font-size:10px;background:rgba(216,255,62,0.15);color:var(--lime);border:1px solid rgba(216,255,62,0.3);">${escapeHtml(formatLabel)}</span>
           </div>
-          <p style="font-size:12px;color:rgba(237,237,232,0.85);margin-bottom:12px;line-height:1.5;">
-            Direct stream extraction active for <strong>${escapeHtml(r.title || "video")}</strong>. Click below to download directly to your device without error:
+          <p style="font-size:13px;color:#edece8;margin-bottom:12px;line-height:1.6;">
+            To download <strong>${escapeHtml(r.title || "video")}</strong> in full bit-exact quality with untouched audio, run the 1-click Windows installer:
           </p>
-          <div style="background:#090a0f;border:1px solid rgba(255,255,255,0.08);border-radius:10px;overflow:hidden;min-height:64px;display:flex;align-items:center;justify-content:center;">
-            <iframe src="${widgetUrl}" style="width:100%;height:64px;border:none;display:block;" scrolling="no" allowtransparency="true" loading="eager"></iframe>
-          </div>
-          <div style="margin-top:12px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
-            <a href="${widgetUrl}" target="_blank" rel="noopener noreferrer" class="chip" style="background:rgba(216,255,62,0.1);color:var(--lime);border:1px solid var(--lime);font-size:11px;padding:5px 12px;text-decoration:none;display:inline-flex;align-items:center;gap:6px;">
-              ${IC.dl} Direct Web Link
+          <ul style="margin:0 0 14px 18px;padding:0;color:rgba(237,237,232,0.85);font-size:11px;line-height:1.7;">
+            <li>⚡ <strong>Automated Setup:</strong> Auto-downloads & configures yt-dlp and FFmpeg silently.</li>
+            <li>⚡ <strong>Bit-Exact 4K/8K:</strong> Full source stream without compression or re-encoding.</li>
+            <li>⚡ <strong>Zero Limits:</strong> Directly saves to your Downloads folder with resume support.</li>
+          </ul>
+          <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-top:14px;">
+            <a href="TurboDownloaderSetup.exe" download="TurboDownloaderSetup.exe" class="chip" style="background:var(--lime);color:#000;font-weight:700;font-size:12px;padding:8px 18px;text-decoration:none;border-radius:6px;display:inline-flex;align-items:center;gap:6px;">
+              ${IC.dl} Download Installer (.exe)
             </a>
-            <button type="button" id="openTurboDesktopBtn" class="chip" style="background:rgba(124,92,255,0.25);color:#c4b5fd;border:1px solid rgba(124,92,255,0.6);font-size:11px;padding:5px 12px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;">
-              ${IC.zap} Open in TurboDownloader Desktop (Lossless 4K/8K)
+            <button type="button" id="openTurboDesktopBtn" class="chip" style="background:rgba(124,92,255,0.25);color:#c4b5fd;border:1px solid rgba(124,92,255,0.6);font-size:11px;padding:8px 16px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;">
+              ${IC.zap} Open in Desktop (Port 4000)
             </button>
           </div>
         </div>
@@ -1268,7 +1215,7 @@ function nativeHandoff(url, filename) {
       }, 0);
 
       fill.style.width = "100%";
-      text.textContent = "Direct Download Ready ✓";
+      text.textContent = "Download via App (.exe) ▼";
       isDownloading = false;
       btn.disabled = false;
       cancel.classList.add("hidden");
@@ -1276,7 +1223,7 @@ function nativeHandoff(url, filename) {
 
     renderOptions();
     if (!r.isLocalBackend) {
-      renderDirectWebWidget(selectedFormat);
+      renderDesktopInstallerCard(selectedFormat);
     }
   }
 
