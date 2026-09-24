@@ -72,6 +72,15 @@ namespace TurboDownloader
         {
             try
             {
+                AppDomain.CurrentDomain.UnhandledException += (s, e) =>
+                {
+                    try
+                    {
+                        File.WriteAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "crash.log"), (e.ExceptionObject != null ? e.ExceptionObject.ToString() : "Unknown error"));
+                    }
+                    catch { }
+                };
+
                 try
                 {
                     ServicePointManager.SecurityProtocol = (SecurityProtocolType)3072 | (SecurityProtocolType)768 | SecurityProtocolType.Tls;
@@ -123,12 +132,27 @@ namespace TurboDownloader
 
             Task.Factory.StartNew(() =>
             {
-                while (listener.IsListening)
+                while (listener != null && listener.IsListening)
                 {
                     try
                     {
                         HttpListenerContext ctx = listener.GetContext();
-                        Task.Factory.StartNew(() => HandleRequest(ctx));
+                        Task.Factory.StartNew(() =>
+                        {
+                            try
+                            {
+                                HandleRequest(ctx);
+                            }
+                            catch (Exception)
+                            {
+                                try
+                                {
+                                    ctx.Response.StatusCode = 500;
+                                    ctx.Response.Close();
+                                }
+                                catch { }
+                            }
+                        });
                     }
                     catch { }
                 }
@@ -185,21 +209,22 @@ namespace TurboDownloader
             }
 
             string rawUrl = req.Url.AbsolutePath;
+            bool isHead = (req.HttpMethod == "HEAD");
 
             try
             {
                 // Serve Frontend
                 if (rawUrl == "/" || rawUrl == "/index.html")
                 {
-                    ServeFile(res, Path.Combine(appDir, "web", "index.html"), "text/html; charset=utf-8");
+                    ServeFile(res, GetWebFilePath("index.html"), "text/html; charset=utf-8", isHead);
                 }
                 else if (rawUrl == "/styles.css" || rawUrl == "/style.css")
                 {
-                    ServeFile(res, Path.Combine(appDir, "web", "styles.css"), "text/css; charset=utf-8");
+                    ServeFile(res, GetWebFilePath("styles.css"), "text/css; charset=utf-8", isHead);
                 }
                 else if (rawUrl == "/app.js")
                 {
-                    ServeFile(res, Path.Combine(appDir, "web", "app.js"), "application/javascript; charset=utf-8");
+                    ServeFile(res, GetWebFilePath("app.js"), "application/javascript; charset=utf-8", isHead);
                 }
                 // FlowDown / PEAK/8K API endpoints
                 else if (rawUrl.StartsWith("/api/v1/media/analyze") && req.HttpMethod == "POST")
@@ -238,11 +263,11 @@ namespace TurboDownloader
                 }
                 else
                 {
-                    // Check if file exists in web folder
-                    string localPath = Path.Combine(appDir, "web", rawUrl.TrimStart('/'));
+                    // Check if file exists in web/docs folder
+                    string localPath = GetWebFilePath(rawUrl.TrimStart('/'));
                     if (File.Exists(localPath))
                     {
-                        ServeFile(res, localPath, GetMimeType(localPath));
+                        ServeFile(res, localPath, GetMimeType(localPath), isHead);
                     }
                     else
                     {
@@ -268,6 +293,19 @@ namespace TurboDownloader
             }
         }
 
+        private static string GetWebFilePath(string relativePath)
+        {
+            string p1 = Path.Combine(appDir, "web", relativePath);
+            if (File.Exists(p1)) return p1;
+            string p2 = Path.Combine(Environment.CurrentDirectory, "web", relativePath);
+            if (File.Exists(p2)) return p2;
+            string p3 = Path.Combine(appDir, "docs", relativePath);
+            if (File.Exists(p3)) return p3;
+            string p4 = Path.Combine(appDir, relativePath);
+            if (File.Exists(p4)) return p4;
+            return p1;
+        }
+
         private static string ReadBody(HttpListenerRequest req)
         {
             using (StreamReader sr = new StreamReader(req.InputStream, req.ContentEncoding))
@@ -283,14 +321,17 @@ namespace TurboDownloader
             return s.Trim('/');
         }
 
-        private static void ServeFile(HttpListenerResponse res, string path, string contentType)
+        private static void ServeFile(HttpListenerResponse res, string path, string contentType, bool isHead = false)
         {
             if (File.Exists(path))
             {
                 byte[] data = File.ReadAllBytes(path);
                 res.ContentType = contentType;
                 res.ContentLength64 = data.Length;
-                res.OutputStream.Write(data, 0, data.Length);
+                if (!isHead)
+                {
+                    res.OutputStream.Write(data, 0, data.Length);
+                }
                 res.Close();
             }
             else
@@ -345,10 +386,11 @@ namespace TurboDownloader
             if (!File.Exists(ytdlp)) ytdlp = "yt-dlp.exe";
 
             string jsRuntimeArg = File.Exists(nodePath) ? string.Format("--js-runtimes node:\"{0}\"", nodePath) : "";
+            string extArgs = "--extractor-args \"youtube:player_client=android,ios,web\"";
 
             ProcessStartInfo psi = new ProcessStartInfo();
             psi.FileName = ytdlp;
-            psi.Arguments = string.Format("{0} --dump-json --no-playlist \"{1}\"", jsRuntimeArg, url);
+            psi.Arguments = string.Format("{0} {1} --dump-json --no-playlist \"{2}\"", jsRuntimeArg, extArgs, url);
             psi.CreateNoWindow = true;
             psi.UseShellExecute = false;
             psi.RedirectStandardOutput = true;
@@ -568,7 +610,7 @@ namespace TurboDownloader
             }
             else if (!string.IsNullOrEmpty(formatId) && formatId != "best")
             {
-                formatArg = string.Format("-f \"{0}+bestaudio/best\"", formatId);
+                formatArg = string.Format("-f \"{0}+bestaudio/bestvideo+bestaudio/best\"", formatId);
             }
             else
             {
@@ -577,9 +619,10 @@ namespace TurboDownloader
 
             string outTemplate = Path.Combine(saveDir, "%(title)s.%(ext)s");
             string jsRuntimeArg = File.Exists(nodePath) ? string.Format("--js-runtimes node:\"{0}\"", nodePath) : "";
+            string extArgs = "--extractor-args \"youtube:player_client=android,ios,web\"";
 
-            string args = string.Format("{0} {1} {2} --ffmpeg-location \"{3}\" --newline --no-playlist --no-mtime --windows-filenames -o \"{4}\" \"{5}\"",
-                jsRuntimeArg, formatArg, mergeArg, ffmpeg, outTemplate, job.url);
+            string args = string.Format("{0} {1} {2} {3} --ffmpeg-location \"{4}\" --newline --no-playlist --no-mtime --windows-filenames -o \"{5}\" \"{6}\"",
+                jsRuntimeArg, extArgs, formatArg, mergeArg, ffmpeg, outTemplate, job.url);
 
             job.status = "DOWNLOADING";
 
