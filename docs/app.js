@@ -561,10 +561,12 @@ function nativeHandoff(url, filename) {
     ];
 
     const audioFormats = [
-      { formatId: "bestaudio", quality: "Best Audio", label: "Lossless / 320 kbps", container: "mp3", bitrateKbps: 320, codec: "MP3", filesizeFormatted: "320k" },
-      { formatId: "192k", quality: "High Quality", label: "High / 192 kbps", container: "mp3", bitrateKbps: 192, codec: "MP3", filesizeFormatted: "192k" },
-      { formatId: "128k", quality: "Standard Quality", label: "Standard / 128 kbps", container: "m4a", bitrateKbps: 128, codec: "AAC", filesizeFormatted: "128k" },
-      { formatId: "opus", quality: "Opus Audio", label: "Opus / 160 kbps", container: "webm", bitrateKbps: 160, codec: "Opus", filesizeFormatted: "160k" }
+      { formatId: "mp3-320k", quality: "Lossless MP3", label: "320 kbps (Lossless MP3)", container: "mp3", bitrateKbps: 320, codec: "MP3", filesizeFormatted: "320k Lossless", audioOnly: true },
+      { formatId: "mp3-192k", quality: "High Quality MP3", label: "192 kbps (High Quality MP3)", container: "mp3", bitrateKbps: 192, codec: "MP3", filesizeFormatted: "192k High", audioOnly: true },
+      { formatId: "mp3-128k", quality: "Standard MP3", label: "128 kbps (Standard MP3)", container: "mp3", bitrateKbps: 128, codec: "MP3", filesizeFormatted: "128k Standard", audioOnly: true },
+      { formatId: "mp3-64k", quality: "Compact MP3", label: "64 kbps (Voice / Compact MP3)", container: "mp3", bitrateKbps: 64, codec: "MP3", filesizeFormatted: "64k Compact", audioOnly: true },
+      { formatId: "128k", quality: "Standard Quality", label: "Standard / 128 kbps", container: "m4a", bitrateKbps: 128, codec: "AAC", filesizeFormatted: "128k", audioOnly: true },
+      { formatId: "opus", quality: "Opus Audio", label: "Opus / 160 kbps", container: "webm", bitrateKbps: 160, codec: "Opus", filesizeFormatted: "160k", audioOnly: true }
     ];
 
     return { videoFormats, audioFormats };
@@ -614,7 +616,20 @@ function nativeHandoff(url, filename) {
       const json = await res.json();
       const d = json.data;
       const videoFormats = Array.isArray(d.videoFormats) ? d.videoFormats : [];
-      const audioFormats = Array.isArray(d.audioFormats) ? d.audioFormats : [];
+      let audioFormats = Array.isArray(d.audioFormats) ? d.audioFormats : [];
+
+      const hasMp3 = audioFormats.some(f => (f.container || "").toLowerCase() === "mp3" || (f.formatId || "").startsWith("mp3"));
+      if (!hasMp3) {
+        const durSec = d.durationSeconds || 0;
+        const mp3Defaults = [
+          { formatId: "mp3-320k", quality: "Lossless MP3", label: "320 kbps (Lossless MP3)", container: "mp3", bitrateKbps: 320, codec: "MP3", filesizeFormatted: durSec > 0 ? humanBytes(durSec * (320 * 1024 / 8)) : "320k Lossless", audioOnly: true },
+          { formatId: "mp3-192k", quality: "High Quality MP3", label: "192 kbps (High Quality MP3)", container: "mp3", bitrateKbps: 192, codec: "MP3", filesizeFormatted: durSec > 0 ? humanBytes(durSec * (192 * 1024 / 8)) : "192k High", audioOnly: true },
+          { formatId: "mp3-128k", quality: "Standard MP3", label: "128 kbps (Standard MP3)", container: "mp3", bitrateKbps: 128, codec: "MP3", filesizeFormatted: durSec > 0 ? humanBytes(durSec * (128 * 1024 / 8)) : "128k Standard", audioOnly: true },
+          { formatId: "mp3-64k", quality: "Compact MP3", label: "64 kbps (Voice / Compact MP3)", container: "mp3", bitrateKbps: 64, codec: "MP3", filesizeFormatted: durSec > 0 ? humanBytes(durSec * (64 * 1024 / 8)) : "64k Compact", audioOnly: true }
+        ];
+        audioFormats = [...mp3Defaults, ...audioFormats];
+      }
+
       const hasFormats = videoFormats.length > 0 || audioFormats.length > 0;
 
       if (!hasFormats) {
@@ -787,16 +802,37 @@ function nativeHandoff(url, filename) {
                 </button>
                 <div class="msg" id="ytDlMsg"></div>
               </div>
+              <button type="button" class="btn-mp3-quick" id="ytDlMp3QuickBtn" title="Direct 1-Click MP3 Download (320 kbps)">
+                <svg viewBox="0 0 24 24" class="ico" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+                <span>MP3 Audio (320k)</span>
+              </button>
               <button class="btn-ghost hidden" id="ytDlCancel" aria-label="Cancel download">${IC.power}Cancel</button>
             </div>
 
             <!-- Compact Options Panel -->
             <div class="yt-options-panel hidden" id="ytOptionsPanel" role="listbox" aria-label="Available download formats" tabindex="-1">
               <div class="yt-format-filters hidden" id="ytContainerFilters"></div>
-              <div class="yt-sec-title">${IC.film}VIDEO</div>
-              <div id="ytVideoOptionsList"></div>
-              <div class="yt-sec-title">${IC.audio}AUDIO</div>
-              <div id="ytAudioOptionsList"></div>
+              
+              <div id="ytVideoSection">
+                <div class="yt-sec-title">${IC.film}VIDEO (MP4 / WEBM)</div>
+                <div id="ytVideoOptionsList"></div>
+              </div>
+
+              <div id="ytMp3Section">
+                <div class="yt-sec-title" style="color:var(--lime);display:flex;align-items:center;justify-content:space-between;margin-top:16px;">
+                  <span style="display:inline-flex;align-items:center;gap:8px;">
+                    <svg viewBox="0 0 24 24" class="ico" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+                    MP3 AUDIO (HIGH BITRATE / CONVERT)
+                  </span>
+                  <span class="yt-opt-pill best" style="font-size:9px;">ALL PLATFORMS</span>
+                </div>
+                <div id="ytMp3OptionsList"></div>
+              </div>
+
+              <div id="ytOtherAudioSection" class="hidden">
+                <div class="yt-sec-title" style="color:var(--dim);margin-top:14px;">${IC.audio}ORIGINAL AUDIO STREAMS (M4A / WEBM)</div>
+                <div id="ytOtherAudioOptionsList"></div>
+              </div>
             </div>
           </div>
 
@@ -814,10 +850,15 @@ function nativeHandoff(url, filename) {
     const text = $("#ytDlText");
     const msg = $("#ytDlMsg");
     const cancel = $("#ytDlCancel");
+    const mp3QuickBtn = $("#ytDlMp3QuickBtn");
     const panel = $("#ytOptionsPanel");
     const filterBox = $("#ytContainerFilters");
+    const videoSection = $("#ytVideoSection");
     const videoList = $("#ytVideoOptionsList");
-    const audioList = $("#ytAudioOptionsList");
+    const mp3Section = $("#ytMp3Section");
+    const mp3List = $("#ytMp3OptionsList");
+    const otherAudioSection = $("#ytOtherAudioSection");
+    const otherAudioList = $("#ytOtherAudioOptionsList");
     const errContainer = $("#ytErrorContainer");
 
     let isDownloading = false;
@@ -825,12 +866,28 @@ function nativeHandoff(url, filename) {
     let currentJobId = null;
 
     const videoFormats = Array.isArray(r.videoFormats) ? r.videoFormats : [];
-    const audioFormats = Array.isArray(r.audioFormats) ? r.audioFormats : [];
+    let audioFormats = Array.isArray(r.audioFormats) ? [...r.audioFormats] : [];
+
+    const hasMp3InList = audioFormats.some(f => (f.container || "").toLowerCase() === "mp3" || (f.formatId || "").startsWith("mp3"));
+    if (!hasMp3InList) {
+      const durSec = r.durationSeconds || 0;
+      const mp3Defaults = [
+        { formatId: "mp3-320k", label: "320 kbps (Lossless MP3)", container: "mp3", bitrateKbps: 320, codec: "MP3", filesizeFormatted: durSec > 0 ? humanBytes(durSec * (320 * 1024 / 8)) : "320k Lossless", audioOnly: true },
+        { formatId: "mp3-192k", label: "192 kbps (High Quality MP3)", container: "mp3", bitrateKbps: 192, codec: "MP3", filesizeFormatted: durSec > 0 ? humanBytes(durSec * (192 * 1024 / 8)) : "192k High", audioOnly: true },
+        { formatId: "mp3-128k", label: "128 kbps (Standard MP3)", container: "mp3", bitrateKbps: 128, codec: "MP3", filesizeFormatted: durSec > 0 ? humanBytes(durSec * (128 * 1024 / 8)) : "128k Standard", audioOnly: true },
+        { formatId: "mp3-64k", label: "64 kbps (Voice / Compact MP3)", container: "mp3", bitrateKbps: 64, codec: "MP3", filesizeFormatted: durSec > 0 ? humanBytes(durSec * (64 * 1024 / 8)) : "64k Compact", audioOnly: true }
+      ];
+      audioFormats = [...mp3Defaults, ...audioFormats];
+    }
+
+    const mp3Formats = audioFormats.filter(f => (f.container || "").toLowerCase() === "mp3" || (f.formatId || "").startsWith("mp3"));
+    const otherAudioFormats = audioFormats.filter(f => (f.container || "").toLowerCase() !== "mp3" && !(f.formatId || "").startsWith("mp3"));
 
     const containers = Array.from(new Set([
-      ...videoFormats.map((f) => f.container).filter(Boolean),
-      ...audioFormats.map((f) => f.container).filter(Boolean)
-    ]));
+      ...videoFormats.map((f) => (f.container || "").toLowerCase()),
+      "mp3",
+      ...otherAudioFormats.map((f) => (f.container || "").toLowerCase())
+    ])).filter(Boolean);
 
     let activeFilter = "ALL";
 
@@ -857,64 +914,105 @@ function nativeHandoff(url, filename) {
         isBest: true,
         label: `Best (${getCanonicalResolution(videoFormats[0])})`
       };
-    } else if (audioFormats.length > 0) {
+    } else if (mp3Formats.length > 0) {
       selectedFormat = {
-        ...audioFormats[0],
+        ...mp3Formats[0],
         audioOnly: true,
         isBest: true,
-        label: `Best Audio (${audioFormats[0].label || audioFormats[0].formatId})`
+        label: `320 kbps MP3`
       };
     }
 
     function renderOptions() {
-      const filteredVideo = activeFilter === "ALL"
-        ? videoFormats
-        : videoFormats.filter((f) => (f.container || "").toUpperCase() === activeFilter);
+      // 1. Video Section
+      const shouldShowVideo = activeFilter === "ALL" || activeFilter === "MP4" || activeFilter === "WEBM";
+      if (!shouldShowVideo) {
+        if (videoSection) videoSection.classList.add("hidden");
+      } else {
+        if (videoSection) videoSection.classList.remove("hidden");
+        const filteredVideo = activeFilter === "ALL"
+          ? videoFormats
+          : videoFormats.filter((f) => (f.container || "").toUpperCase() === activeFilter);
 
-      let videoHtml = "";
-      if (filteredVideo.length > 0) {
-        const best = filteredVideo[0];
-        const isBestSelected = selectedFormat && selectedFormat.isBest && !selectedFormat.audioOnly;
-        const bestResLabel = getCanonicalResolution(best);
-        const bestSize = best.filesizeFormatted || (best.estimatedSizeBytes ? humanBytes(best.estimatedSizeBytes) : null);
-        const bestCodec = cleanCodec(best.vcodec || best.codec);
-
-        videoHtml += `
-          <div class="yt-opt-item ${isBestSelected ? "selected" : ""}" role="option" tabindex="0"
-               data-opt-type="video-best" aria-selected="${isBestSelected ? "true" : "false"}">
-            <div class="yt-opt-main">
-              <span class="yt-opt-label">Best Available</span>
-              <span class="yt-opt-pill best">BEST</span>
-              <span class="yt-opt-pill">${escapeHtml(bestResLabel)}</span>
-              ${best.fps && Number(best.fps) > 0 ? `<span class="yt-opt-pill">${best.fps} FPS</span>` : ""}
-              ${bestCodec ? `<span class="yt-opt-pill">${escapeHtml(bestCodec)}</span>` : ""}
-              ${best.container ? `<span class="yt-opt-pill">${escapeHtml(best.container.toUpperCase())}</span>` : ""}
-            </div>
-            <div class="yt-opt-meta">
-              ${bestSize ? `<span class="yt-opt-size">${escapeHtml(bestSize)}</span>` : ""}
-              <span class="yt-opt-action">${isBestSelected ? `${IC.zap} Ready` : `${IC.dl} Select`}</span>
-            </div>
-          </div>
-        `;
-
-        filteredVideo.forEach((fmt, idx) => {
-          if (fmt.formatId === "best") return;
-          const isSelected = selectedFormat && !selectedFormat.isBest && selectedFormat.formatId === fmt.formatId;
-          const resLabel = getCanonicalResolution(fmt);
-          const size = fmt.filesizeFormatted || (fmt.estimatedSizeBytes ? humanBytes(fmt.estimatedSizeBytes) : null);
-          const codec = cleanCodec(fmt.vcodec || fmt.codec);
-          const dim = fmt.width && fmt.height ? `${fmt.width} × ${fmt.height}` : null;
+        let videoHtml = "";
+        if (filteredVideo.length > 0) {
+          const best = filteredVideo[0];
+          const isBestSelected = selectedFormat && selectedFormat.isBest && !selectedFormat.audioOnly;
+          const bestResLabel = getCanonicalResolution(best);
+          const bestSize = best.filesizeFormatted || (best.estimatedSizeBytes ? humanBytes(best.estimatedSizeBytes) : null);
+          const bestCodec = cleanCodec(best.vcodec || best.codec);
 
           videoHtml += `
-            <div class="yt-opt-item ${isSelected ? "selected" : ""}" role="option" tabindex="0"
-                 data-opt-type="video" data-idx="${idx}" aria-selected="${isSelected ? "true" : "false"}">
+            <div class="yt-opt-item ${isBestSelected ? "selected" : ""}" role="option" tabindex="0"
+                 data-opt-type="video-best" aria-selected="${isBestSelected ? "true" : "false"}">
               <div class="yt-opt-main">
-                <span class="yt-opt-label">${escapeHtml(resLabel)}</span>
-                ${dim ? `<span class="yt-opt-pill">${escapeHtml(dim)}</span>` : ""}
-                ${fmt.fps && Number(fmt.fps) > 0 ? `<span class="yt-opt-pill">${fmt.fps} FPS</span>` : ""}
-                ${codec ? `<span class="yt-opt-pill">${escapeHtml(codec)}</span>` : ""}
-                ${fmt.container ? `<span class="yt-opt-pill">${escapeHtml(fmt.container.toUpperCase())}</span>` : ""}
-                ${fmt.hdr ? `<span class="yt-opt-pill best">HDR</span>` : ""}
+                <span class="yt-opt-label">Best Available</span>
+                <span class="yt-opt-pill best">BEST</span>
+                <span class="yt-opt-pill">${escapeHtml(bestResLabel)}</span>
+                ${best.fps && Number(best.fps) > 0 ? `<span class="yt-opt-pill">${best.fps} FPS</span>` : ""}
+                ${bestCodec ? `<span class="yt-opt-pill">${escapeHtml(bestCodec)}</span>` : ""}
+                ${best.container ? `<span class="yt-opt-pill">${escapeHtml(best.container.toUpperCase())}</span>` : ""}
+              </div>
+              <div class="yt-opt-meta">
+                ${bestSize ? `<span class="yt-opt-size">${escapeHtml(bestSize)}</span>` : ""}
+                <span class="yt-opt-action">${isBestSelected ? `${IC.zap} Ready` : `${IC.dl} Select`}</span>
+              </div>
+            </div>
+          `;
+
+          filteredVideo.forEach((fmt, idx) => {
+            if (fmt.formatId === "best") return;
+            const isSelected = selectedFormat && !selectedFormat.isBest && !selectedFormat.audioOnly && selectedFormat.formatId === fmt.formatId;
+            const resLabel = getCanonicalResolution(fmt);
+            const size = fmt.filesizeFormatted || (fmt.estimatedSizeBytes ? humanBytes(fmt.estimatedSizeBytes) : null);
+            const codec = cleanCodec(fmt.vcodec || fmt.codec);
+            const dim = fmt.width && fmt.height ? `${fmt.width} × ${fmt.height}` : null;
+
+            videoHtml += `
+              <div class="yt-opt-item ${isSelected ? "selected" : ""}" role="option" tabindex="0"
+                   data-opt-type="video" data-idx="${idx}" aria-selected="${isSelected ? "true" : "false"}">
+                <div class="yt-opt-main">
+                  <span class="yt-opt-label">${escapeHtml(resLabel)}</span>
+                  ${dim ? `<span class="yt-opt-pill">${escapeHtml(dim)}</span>` : ""}
+                  ${fmt.fps && Number(fmt.fps) > 0 ? `<span class="yt-opt-pill">${fmt.fps} FPS</span>` : ""}
+                  ${codec ? `<span class="yt-opt-pill">${escapeHtml(codec)}</span>` : ""}
+                  ${fmt.container ? `<span class="yt-opt-pill">${escapeHtml(fmt.container.toUpperCase())}</span>` : ""}
+                  ${fmt.hdr ? `<span class="yt-opt-pill best">HDR</span>` : ""}
+                </div>
+                <div class="yt-opt-meta">
+                  ${size ? `<span class="yt-opt-size">${escapeHtml(size)}</span>` : ""}
+                  <span class="yt-opt-action">${isSelected ? `${IC.zap} Ready` : `${IC.dl} Select`}</span>
+                </div>
+              </div>
+            `;
+          });
+        } else {
+          videoHtml = `<div style="font-family:var(--font-m);font-size:11px;color:var(--dim);padding:8px 4px;">No video streams matching filter.</div>`;
+        }
+        videoList.innerHTML = videoHtml;
+      }
+
+      // 2. Dedicated MP3 Section
+      const shouldShowMp3 = activeFilter === "ALL" || activeFilter === "MP3";
+      if (!shouldShowMp3 || mp3Formats.length === 0) {
+        if (mp3Section) mp3Section.classList.add("hidden");
+      } else {
+        if (mp3Section) mp3Section.classList.remove("hidden");
+        let mp3Html = "";
+        mp3Formats.forEach((fmt, idx) => {
+          const isSelected = selectedFormat && selectedFormat.audioOnly && (selectedFormat.container || "").toLowerCase() === "mp3" &&
+            (selectedFormat.formatId === fmt.formatId || (selectedFormat.isBest && idx === 0));
+          const size = fmt.filesizeFormatted || (fmt.estimatedSizeBytes ? humanBytes(fmt.estimatedSizeBytes) : null);
+          const badge = fmt.bitrateKbps >= 320 ? "STUDIO / LOSSLESS" : (fmt.bitrateKbps >= 192 ? "HIGH QUALITY" : (fmt.bitrateKbps >= 128 ? "STANDARD" : "COMPACT"));
+
+          mp3Html += `
+            <div class="yt-opt-item ${isSelected ? "selected" : ""}" role="option" tabindex="0"
+                 data-opt-type="mp3" data-idx="${idx}" aria-selected="${isSelected ? "true" : "false"}">
+              <div class="yt-opt-main">
+                <span class="yt-opt-label">${escapeHtml(fmt.label || `${fmt.bitrateKbps} kbps MP3`)}</span>
+                <span class="yt-opt-pill best">MP3</span>
+                <span class="yt-opt-pill ${fmt.bitrateKbps >= 320 ? "best" : ""}">${fmt.bitrateKbps ? `${fmt.bitrateKbps} KBPS` : "320 KBPS"}</span>
+                <span class="yt-opt-pill">${badge}</span>
               </div>
               <div class="yt-opt-meta">
                 ${size ? `<span class="yt-opt-size">${escapeHtml(size)}</span>` : ""}
@@ -923,46 +1021,28 @@ function nativeHandoff(url, filename) {
             </div>
           `;
         });
-      } else {
-        videoHtml = `<div style="font-family:var(--font-m);font-size:11px;color:var(--dim);padding:8px 4px;">No video streams matching filter.</div>`;
+        mp3List.innerHTML = mp3Html;
       }
-      videoList.innerHTML = videoHtml;
 
-      const filteredAudio = activeFilter === "ALL"
-        ? audioFormats
-        : audioFormats.filter((f) => (f.container || "").toUpperCase() === activeFilter);
+      // 3. Other Audio Streams (M4A / Opus / WebM)
+      const shouldShowOtherAudio = activeFilter === "ALL" || activeFilter === "M4A" || activeFilter === "WEBM" || activeFilter === "OPUS";
+      const filteredOther = activeFilter === "ALL"
+        ? otherAudioFormats
+        : otherAudioFormats.filter((f) => (f.container || "").toUpperCase() === activeFilter);
 
-      let audioHtml = "";
-      if (filteredAudio.length > 0) {
-        const bestAud = filteredAudio[0];
-        const isBestAudSelected = selectedFormat && selectedFormat.isBest && selectedFormat.audioOnly;
-        const bestAudSize = bestAud.filesizeFormatted || (bestAud.estimatedSizeBytes ? humanBytes(bestAud.estimatedSizeBytes) : null);
-
-        audioHtml += `
-          <div class="yt-opt-item ${isBestAudSelected ? "selected" : ""}" role="option" tabindex="0"
-               data-opt-type="audio-best" aria-selected="${isBestAudSelected ? "true" : "false"}">
-            <div class="yt-opt-main">
-              <span class="yt-opt-label">Best Available Audio</span>
-              <span class="yt-opt-pill best">BEST</span>
-              ${bestAud.bitrateKbps ? `<span class="yt-opt-pill">${bestAud.bitrateKbps} kbps</span>` : ""}
-              ${bestAud.container ? `<span class="yt-opt-pill">${escapeHtml(bestAud.container.toUpperCase())}</span>` : ""}
-            </div>
-            <div class="yt-opt-meta">
-              ${bestAudSize ? `<span class="yt-opt-size">${escapeHtml(bestAudSize)}</span>` : ""}
-              <span class="yt-opt-action">${isBestAudSelected ? `${IC.zap} Ready` : `${IC.dl} Select`}</span>
-            </div>
-          </div>
-        `;
-
-        filteredAudio.forEach((fmt, idx) => {
-          if (fmt.formatId === "bestaudio" && filteredAudio.length > 1) return;
-          const isSelected = selectedFormat && !selectedFormat.isBest && selectedFormat.formatId === fmt.formatId;
+      if (!shouldShowOtherAudio || filteredOther.length === 0) {
+        if (otherAudioSection) otherAudioSection.classList.add("hidden");
+      } else {
+        if (otherAudioSection) otherAudioSection.classList.remove("hidden");
+        let otherHtml = "";
+        filteredOther.forEach((fmt, idx) => {
+          const isSelected = selectedFormat && selectedFormat.audioOnly && (selectedFormat.container || "").toLowerCase() !== "mp3" && selectedFormat.formatId === fmt.formatId;
           const size = fmt.filesizeFormatted || (fmt.estimatedSizeBytes ? humanBytes(fmt.estimatedSizeBytes) : null);
           const label = fmt.label || fmt.formatId;
 
-          audioHtml += `
+          otherHtml += `
             <div class="yt-opt-item ${isSelected ? "selected" : ""}" role="option" tabindex="0"
-                 data-opt-type="audio" data-idx="${idx}" aria-selected="${isSelected ? "true" : "false"}">
+                 data-opt-type="other-audio" data-idx="${idx}" aria-selected="${isSelected ? "true" : "false"}">
               <div class="yt-opt-main">
                 <span class="yt-opt-label">${escapeHtml(label)}</span>
                 ${fmt.bitrateKbps ? `<span class="yt-opt-pill">${fmt.bitrateKbps} kbps</span>` : ""}
@@ -976,31 +1056,39 @@ function nativeHandoff(url, filename) {
             </div>
           `;
         });
-      } else {
-        audioHtml = `<div style="font-family:var(--font-m);font-size:11px;color:var(--dim);padding:8px 4px;">No audio streams matching filter.</div>`;
+        otherAudioList.innerHTML = otherHtml;
       }
-      audioList.innerHTML = audioHtml;
 
+      // Handle selection click & keyboard
       $$(".yt-opt-item", panel).forEach((el) => {
         const handlePick = (e) => {
           const type = el.dataset.optType;
           let wasAlreadySelected = false;
 
           if (type === "video-best") {
+            const filteredVideo = activeFilter === "ALL"
+              ? videoFormats
+              : videoFormats.filter((f) => (f.container || "").toUpperCase() === activeFilter);
             const best = filteredVideo[0];
             wasAlreadySelected = selectedFormat && selectedFormat.isBest && !selectedFormat.audioOnly;
-            selectedFormat = { ...best, isBest: true, label: `Best (${getCanonicalResolution(best)})` };
+            selectedFormat = { ...best, isBest: true, audioOnly: false, label: `Best (${getCanonicalResolution(best)})` };
           } else if (type === "video") {
+            const filteredVideo = activeFilter === "ALL"
+              ? videoFormats
+              : videoFormats.filter((f) => (f.container || "").toUpperCase() === activeFilter);
             const fmt = filteredVideo[Number(el.dataset.idx)];
-            wasAlreadySelected = selectedFormat && !selectedFormat.isBest && selectedFormat.formatId === fmt.formatId;
-            selectedFormat = { ...fmt, isBest: false, label: getCanonicalResolution(fmt) };
-          } else if (type === "audio-best") {
-            const best = filteredAudio[0];
-            wasAlreadySelected = selectedFormat && selectedFormat.isBest && selectedFormat.audioOnly;
-            selectedFormat = { ...best, audioOnly: true, isBest: true, label: "Best Audio" };
-          } else if (type === "audio") {
-            const fmt = filteredAudio[Number(el.dataset.idx)];
-            wasAlreadySelected = selectedFormat && !selectedFormat.isBest && selectedFormat.formatId === fmt.formatId;
+            wasAlreadySelected = selectedFormat && !selectedFormat.isBest && !selectedFormat.audioOnly && selectedFormat.formatId === fmt.formatId;
+            selectedFormat = { ...fmt, isBest: false, audioOnly: false, label: getCanonicalResolution(fmt) };
+          } else if (type === "mp3") {
+            const fmt = mp3Formats[Number(el.dataset.idx)];
+            wasAlreadySelected = selectedFormat && selectedFormat.audioOnly && (selectedFormat.container || "").toLowerCase() === "mp3" && selectedFormat.formatId === fmt.formatId;
+            selectedFormat = { ...fmt, audioOnly: true, isBest: Number(el.dataset.idx) === 0, container: "mp3", label: fmt.label || `${fmt.bitrateKbps} kbps MP3` };
+          } else if (type === "other-audio") {
+            const filteredOther = activeFilter === "ALL"
+              ? otherAudioFormats
+              : otherAudioFormats.filter((f) => (f.container || "").toUpperCase() === activeFilter);
+            const fmt = filteredOther[Number(el.dataset.idx)];
+            wasAlreadySelected = selectedFormat && selectedFormat.audioOnly && selectedFormat.formatId === fmt.formatId;
             selectedFormat = { ...fmt, audioOnly: true, isBest: false, label: fmt.label || fmt.formatId };
           }
 
@@ -1039,6 +1127,26 @@ function nativeHandoff(url, filename) {
       });
     }
 
+    if (mp3QuickBtn) {
+      mp3QuickBtn.addEventListener("click", () => {
+        if (isDownloading) return;
+        const targetMp3 = mp3Formats[0] || { formatId: "mp3-320k", container: "mp3", quality: "320k", audioOnly: true, label: "320 kbps (Lossless MP3)" };
+        selectedFormat = { ...targetMp3, audioOnly: true, container: "mp3", isBest: true, label: "320 kbps MP3" };
+        updateButtonLabel();
+        if (r.isLocalBackend || isDesktopEnvironment()) {
+          const cacheKey = `${r.url}_${selectedFormat.formatId}_mp3_true`;
+          const existing = downloadedCache[cacheKey];
+          if (existing) {
+            showCompletedUi(existing, selectedFormat);
+            return;
+          }
+          executeDownload(selectedFormat);
+        } else {
+          handleLaunchOrInstallDesktop(r.url);
+        }
+      });
+    }
+
     function updateButtonLabel() {
       const selName = selectedFormat ? selectedFormat.label : "Video";
       const cont = selectedFormat && selectedFormat.container ? ` [${selectedFormat.container.toUpperCase()}]` : "";
@@ -1070,14 +1178,16 @@ function nativeHandoff(url, filename) {
       const sizeLabel = completedJob.fileSizeBytes ? humanBytes(completedJob.fileSizeBytes) : (completedJob.downloadedBytes ? humanBytes(completedJob.downloadedBytes) : "");
       const sizeText = sizeLabel ? ` (${sizeLabel})` : "";
       const currentFmt = fmt || selectedFormat;
-      const cacheKey = `${r.url}_${(currentFmt && currentFmt.formatId) || 'best'}`;
+      const isAudio = Boolean(currentFmt && (currentFmt.audioOnly || (currentFmt.container || "").toLowerCase() === "mp3" || (currentFmt.formatId || "").startsWith("mp3")));
+      const openLabel = isAudio ? "🎵 Open MP3 Audio" : "🎬 Open Video File";
+      const cacheKey = `${r.url}_${(currentFmt && currentFmt.formatId) || 'best'}_${(currentFmt && currentFmt.container) || 'mp4'}_${Boolean(currentFmt && currentFmt.audioOnly)}`;
 
       msg.innerHTML = `
         <div style="line-height:1.6;font-size:12px;">
-          <strong>✓ Saved to Downloads:</strong> ${escapeHtml(completedJob.title || r.title || "video")}${sizeText}
+          <strong>✓ Saved to Downloads:</strong> ${escapeHtml(completedJob.title || r.title || (isAudio ? "audio" : "video"))}${sizeText}
         </div>
         <div style="margin-top:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-          <button type="button" class="chip" id="openVideoFileBtn" style="cursor:pointer;background:var(--lime);color:#000;font-weight:700;padding:7px 14px;border-radius:6px;box-shadow:0 0 14px rgba(216,255,62,0.25);">🎬 Open Video File</button>
+          <button type="button" class="chip" id="openVideoFileBtn" style="cursor:pointer;background:var(--lime);color:#000;font-weight:700;padding:7px 14px;border-radius:6px;box-shadow:0 0 14px rgba(216,255,62,0.25);">${openLabel}</button>
           <button type="button" class="chip" id="openLocalFolderBtn" style="cursor:pointer;background:rgba(216,255,62,0.15);color:var(--lime);border:1px solid var(--lime);padding:7px 14px;border-radius:6px;">📂 Open in Downloads Folder</button>
           <button type="button" class="chip" id="saveAsBtn" style="cursor:pointer;background:rgba(124,92,255,0.25);color:#c4b5fd;border:1px solid rgba(124,92,255,0.6);padding:7px 14px;border-radius:6px;">💾 Save As / Export</button>
           <button type="button" class="chip" id="reDownloadBtn" style="cursor:pointer;background:rgba(255,255,255,0.06);color:var(--dim);padding:7px 12px;border-radius:6px;">🔄 Re-download</button>
@@ -1106,14 +1216,13 @@ function nativeHandoff(url, filename) {
         const sab = document.getElementById("saveAsBtn");
         if (sab) {
           sab.addEventListener("click", () => {
-            nativeHandoff(fileUrl, `${completedJob.title || r.title || "video"}.${completedJob.requestedFormat || "mp4"}`);
+            nativeHandoff(fileUrl, `${completedJob.title || r.title || "download"}.${completedJob.requestedFormat || (isAudio ? "mp3" : "mp4")}`);
           });
         }
         const rdb = document.getElementById("reDownloadBtn");
         if (rdb) {
           rdb.addEventListener("click", () => {
             delete downloadedCache[cacheKey];
-            delete downloadedCache[r.url];
             executeDownload(selectedFormat, true);
           });
         }
@@ -1121,7 +1230,7 @@ function nativeHandoff(url, filename) {
 
       // ONLY trigger browser nativeHandoff if purely on remote web (no local desktop engine saving to disk)
       if (!isDesktopEnvironment() && !r.isLocalBackend) {
-        nativeHandoff(fileUrl, `${completedJob.title || r.title || "video"}.${completedJob.requestedFormat || "mp4"}`);
+        nativeHandoff(fileUrl, `${completedJob.title || r.title || "download"}.${completedJob.requestedFormat || (isAudio ? "mp3" : "mp4")}`);
       }
 
       Ledger.bump(r.url);
@@ -1130,8 +1239,8 @@ function nativeHandoff(url, filename) {
     btn.addEventListener("click", () => {
       if (isDownloading) return;
       if (r.isLocalBackend || isDesktopEnvironment()) {
-        const cacheKey = `${r.url}_${(selectedFormat && selectedFormat.formatId) || 'best'}`;
-        const existing = downloadedCache[cacheKey] || downloadedCache[r.url];
+        const cacheKey = `${r.url}_${(selectedFormat && selectedFormat.formatId) || 'best'}_${(selectedFormat && selectedFormat.container) || 'mp4'}_${Boolean(selectedFormat && selectedFormat.audioOnly)}`;
+        const existing = downloadedCache[cacheKey];
         if (existing) {
           showCompletedUi(existing, selectedFormat);
           return;
@@ -1171,8 +1280,8 @@ function nativeHandoff(url, filename) {
     async function executeDownload(fmt, force = false) {
       if (isDownloading) return;
 
-      const cacheKey = `${r.url}_${(fmt && fmt.formatId) || 'best'}`;
-      const existing = downloadedCache[cacheKey] || downloadedCache[r.url];
+      const cacheKey = `${r.url}_${(fmt && fmt.formatId) || 'best'}_${(fmt && fmt.container) || 'mp4'}_${Boolean(fmt && fmt.audioOnly)}`;
+      const existing = downloadedCache[cacheKey];
       if (!force && existing) {
         showCompletedUi(existing, fmt);
         return;

@@ -27,6 +27,8 @@ namespace TurboDownloader
         public long downloadedBytes { get; set; }
         public string title { get; set; }
         public string requestedFormat { get; set; }
+        public string formatId { get; set; }
+        public bool audioOnly { get; set; }
         public string downloadUrl { get; set; }
         public string filePath { get; set; }
         public string errorMessage { get; set; }
@@ -285,7 +287,6 @@ namespace TurboDownloader
 
                 if (!createdNew)
                 {
-                    // Existing instance running! Refocus browser to existing instance port
                     int existingPort = 4000;
                     if (File.Exists(portFilePath))
                     {
@@ -1047,15 +1048,50 @@ namespace TurboDownloader
                     maxDto.height = videoFormats.Count > 0 ? videoFormats[0].height : 2160;
                     videoFormats.Insert(0, maxDto);
 
-                    if (audioFormats.Count == 0)
+                    // Always inject High-Quality MP3 formats for ALL platforms at the top of audioFormats
+                    List<AudioFormatDto> mp3Tiers = new List<AudioFormatDto>();
+                    mp3Tiers.Add(new AudioFormatDto {
+                        formatId = "mp3-320k",
+                        label = "320 kbps (Lossless MP3)",
+                        bitrateKbps = 320,
+                        codec = "MP3",
+                        container = "mp3",
+                        filesizeFormatted = durationSeconds > 0 ? FormatBytes((long)(durationSeconds * (320L * 1024L / 8L))) : "320k Lossless"
+                    });
+                    mp3Tiers.Add(new AudioFormatDto {
+                        formatId = "mp3-192k",
+                        label = "192 kbps (High Quality MP3)",
+                        bitrateKbps = 192,
+                        codec = "MP3",
+                        container = "mp3",
+                        filesizeFormatted = durationSeconds > 0 ? FormatBytes((long)(durationSeconds * (192L * 1024L / 8L))) : "192k High"
+                    });
+                    mp3Tiers.Add(new AudioFormatDto {
+                        formatId = "mp3-128k",
+                        label = "128 kbps (Standard MP3)",
+                        bitrateKbps = 128,
+                        codec = "MP3",
+                        container = "mp3",
+                        filesizeFormatted = durationSeconds > 0 ? FormatBytes((long)(durationSeconds * (128L * 1024L / 8L))) : "128k Standard"
+                    });
+                    mp3Tiers.Add(new AudioFormatDto {
+                        formatId = "mp3-64k",
+                        label = "64 kbps (Voice / Compact MP3)",
+                        bitrateKbps = 64,
+                        codec = "MP3",
+                        container = "mp3",
+                        filesizeFormatted = durationSeconds > 0 ? FormatBytes((long)(durationSeconds * (64L * 1024L / 8L))) : "64k Compact"
+                    });
+
+                    List<AudioFormatDto> finalAudio = new List<AudioFormatDto>(mp3Tiers);
+                    foreach (var af in audioFormats)
                     {
-                        AudioFormatDto bestAud = new AudioFormatDto();
-                        bestAud.formatId = "bestaudio";
-                        bestAud.label = "Best Audio (320 kbps)";
-                        bestAud.bitrateKbps = 320;
-                        bestAud.container = "mp3";
-                        audioFormats.Add(bestAud);
+                        if (af.container != "mp3")
+                        {
+                            finalAudio.Add(af);
+                        }
                     }
+                    audioFormats = finalAudio;
 
                     SendJson(res, new {
                         success = true,
@@ -1098,10 +1134,12 @@ namespace TurboDownloader
         private static List<AudioFormatDto> GetDefaultAudioFormats()
         {
             List<AudioFormatDto> list = new List<AudioFormatDto>();
-            list.Add(new AudioFormatDto { formatId = "bestaudio", label = "Lossless / 320 kbps", container = "mp3", bitrateKbps = 320, codec = "MP3", filesizeFormatted = "320k" });
-            list.Add(new AudioFormatDto { formatId = "192k", label = "High / 192 kbps", container = "mp3", bitrateKbps = 192, codec = "MP3", filesizeFormatted = "192k" });
-            list.Add(new AudioFormatDto { formatId = "128k", label = "Standard / 128 kbps", container = "m4a", bitrateKbps = 128, codec = "AAC", filesizeFormatted = "128k" });
-            list.Add(new AudioFormatDto { formatId = "opus", label = "Opus / 160 kbps", container = "webm", bitrateKbps = 160, codec = "Opus", filesizeFormatted = "160k" });
+            list.Add(new AudioFormatDto { formatId = "mp3-320k", label = "320 kbps (Lossless MP3)", container = "mp3", bitrateKbps = 320, codec = "MP3", filesizeFormatted = "320k Lossless" });
+            list.Add(new AudioFormatDto { formatId = "mp3-192k", label = "192 kbps (High Quality MP3)", container = "mp3", bitrateKbps = 192, codec = "MP3", filesizeFormatted = "192k High" });
+            list.Add(new AudioFormatDto { formatId = "mp3-128k", label = "128 kbps (Standard MP3)", container = "mp3", bitrateKbps = 128, codec = "MP3", filesizeFormatted = "128k Standard" });
+            list.Add(new AudioFormatDto { formatId = "mp3-64k", label = "64 kbps (Compact MP3)", container = "mp3", bitrateKbps = 64, codec = "MP3", filesizeFormatted = "64k Compact" });
+            list.Add(new AudioFormatDto { formatId = "128k", label = "128 kbps (Source AAC)", container = "m4a", bitrateKbps = 128, codec = "AAC", filesizeFormatted = "128k" });
+            list.Add(new AudioFormatDto { formatId = "opus", label = "160 kbps (Source Opus)", container = "webm", bitrateKbps = 160, codec = "Opus", filesizeFormatted = "160k" });
             return list;
         }
 
@@ -1134,6 +1172,9 @@ namespace TurboDownloader
             }
 
             bool force = reqObj.ContainsKey("force") && Convert.ToBoolean(reqObj["force"]);
+            bool isAudioReq = audioOnly || container == "mp3" || (formatId ?? "").StartsWith("mp3") || (formatId ?? "") == "bestaudio";
+            string effectiveContainer = isAudioReq ? "mp3" : container;
+
             if (!force)
             {
                 foreach (var kvp in jobs)
@@ -1141,19 +1182,25 @@ namespace TurboDownloader
                     if (kvp.Value.url == url && kvp.Value.status == "COMPLETED" &&
                         !string.IsNullOrEmpty(kvp.Value.filePath) && File.Exists(kvp.Value.filePath))
                     {
-                        SendJson(res, new {
-                            success = true,
-                            alreadyCompleted = true,
-                            data = new {
-                                id = kvp.Key,
-                                title = kvp.Value.title,
-                                filePath = kvp.Value.filePath,
-                                fileSizeBytes = kvp.Value.fileSizeBytes,
-                                requestedFormat = kvp.Value.requestedFormat,
-                                downloadUrl = kvp.Value.downloadUrl
-                            }
-                        });
-                        return;
+                        bool jobIsAudio = kvp.Value.audioOnly || kvp.Value.requestedFormat == "mp3" || (kvp.Value.formatId ?? "").StartsWith("mp3");
+                        if (jobIsAudio == isAudioReq &&
+                            (string.Equals(kvp.Value.requestedFormat, effectiveContainer, StringComparison.OrdinalIgnoreCase) ||
+                             string.Equals(kvp.Value.formatId, formatId, StringComparison.OrdinalIgnoreCase)))
+                        {
+                            SendJson(res, new {
+                                success = true,
+                                alreadyCompleted = true,
+                                data = new {
+                                    id = kvp.Key,
+                                    title = kvp.Value.title,
+                                    filePath = kvp.Value.filePath,
+                                    fileSizeBytes = kvp.Value.fileSizeBytes,
+                                    requestedFormat = kvp.Value.requestedFormat,
+                                    downloadUrl = kvp.Value.downloadUrl
+                                }
+                            });
+                            return;
+                        }
                     }
                 }
             }
@@ -1165,7 +1212,9 @@ namespace TurboDownloader
             job.url = url;
             job.status = "STARTING";
             job.progressPercent = 0;
-            job.requestedFormat = container;
+            job.formatId = formatId;
+            job.audioOnly = isAudioReq;
+            job.requestedFormat = effectiveContainer;
             job.downloadUrl = string.Format("/api/v1/downloads/{0}/file", jobId);
             jobs[jobId] = job;
 
@@ -1202,19 +1251,44 @@ namespace TurboDownloader
 
             bool isWebM = string.Equals(safeContainer, "webm", StringComparison.OrdinalIgnoreCase) || safeFormatId.EndsWith("-webm", StringComparison.OrdinalIgnoreCase);
 
-            if (audioOnly || safeFormatId == "bestaudio" || safeFormatId == "192k" || safeFormatId == "128k" || safeFormatId == "opus")
+            bool isAudio = audioOnly || safeContainer == "mp3" || safeContainer == "m4a" || safeContainer == "opus" ||
+                           safeFormatId.StartsWith("mp3") || safeFormatId == "bestaudio" || safeFormatId == "192k" || 
+                           safeFormatId == "128k" || safeFormatId == "64k" || safeFormatId == "opus";
+
+            if (isAudio)
             {
                 if (string.Equals(safeContainer, "m4a", StringComparison.OrdinalIgnoreCase))
                 {
-                    formatArg = "-x --audio-format m4a --audio-quality 0";
+                    formatArg = "-f \"bestaudio/best\" -x --audio-format m4a --audio-quality 0";
                 }
                 else if (string.Equals(safeContainer, "webm", StringComparison.OrdinalIgnoreCase) || string.Equals(safeContainer, "opus", StringComparison.OrdinalIgnoreCase))
                 {
-                    formatArg = "-x --audio-format opus";
+                    formatArg = "-f \"bestaudio/best\" -x --audio-format opus";
                 }
                 else
                 {
-                    formatArg = "-x --audio-format mp3 --audio-quality 0";
+                    safeContainer = "mp3";
+                    job.requestedFormat = "mp3";
+                    if (safeFormatId == "mp3-320k" || safeFormatId == "320k" || safeFormatId == "bestaudio")
+                    {
+                        formatArg = "-f \"bestaudio/best\" -x --audio-format mp3 --audio-quality 320K";
+                    }
+                    else if (safeFormatId == "mp3-192k" || safeFormatId == "192k")
+                    {
+                        formatArg = "-f \"bestaudio/best\" -x --audio-format mp3 --audio-quality 192K";
+                    }
+                    else if (safeFormatId == "mp3-128k" || safeFormatId == "128k")
+                    {
+                        formatArg = "-f \"bestaudio/best\" -x --audio-format mp3 --audio-quality 128K";
+                    }
+                    else if (safeFormatId == "mp3-64k" || safeFormatId == "64k")
+                    {
+                        formatArg = "-f \"bestaudio/best\" -x --audio-format mp3 --audio-quality 64K";
+                    }
+                    else
+                    {
+                        formatArg = "-f \"bestaudio/best\" -x --audio-format mp3 --audio-quality 320K";
+                    }
                 }
                 mergeArg = "";
             }
