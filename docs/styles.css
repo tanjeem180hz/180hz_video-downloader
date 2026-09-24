@@ -478,8 +478,123 @@ body {
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
   transition: all .25s ease;
 }
-.desktop-installer-card:hover {
-  border-color: rgba(216,255,62,0.5);
+/* ---------- post-download action buttons ---------- */
+.post-dl-card {
+  margin-top: 14px;
+  padding: 14px 16px;
+  background: rgba(14, 15, 18, 0.85);
+  border: 1px solid rgba(216, 255, 62, 0.28);
+  border-radius: 12px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
+  animation: card-in .3s ease-out;
+}
+.post-dl-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-m);
+  font-size: 12px;
+  color: var(--lime);
+  margin-bottom: 12px;
+  line-height: 1.5;
+  flex-wrap: wrap;
+}
+.post-dl-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: rgba(216, 255, 62, 0.2);
+  color: var(--lime);
+  font-weight: 800;
+  font-size: 11px;
+}
+.post-dl-title {
+  color: var(--bone);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 440px;
+}
+.post-dl-size {
+  color: var(--dim);
+  font-size: 11px;
+  font-weight: 400;
+}
+.post-dl-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.post-dl-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  font-family: var(--font-m);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .02em;
+  padding: 8px 14px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all .2s cubic-bezier(0.16, 1, 0.3, 1);
+  text-decoration: none;
+  user-select: none;
+  outline: none;
+}
+.post-dl-btn:active {
+  transform: scale(0.97);
+}
+.post-dl-btn-primary {
+  background: var(--lime);
+  color: #050608;
+  border-color: var(--lime);
+  box-shadow: 0 0 14px rgba(216, 255, 62, 0.35);
+}
+.post-dl-btn-primary:hover, .post-dl-btn-primary:focus-visible {
+  background: #e6ff66;
+  border-color: #f4ff99;
+  box-shadow: 0 0 20px rgba(216, 255, 62, 0.6);
+  transform: translateY(-1px);
+}
+.post-dl-btn-view {
+  background: rgba(216, 255, 62, 0.1);
+  color: var(--lime);
+  border-color: rgba(216, 255, 62, 0.35);
+}
+.post-dl-btn-view:hover, .post-dl-btn-view:focus-visible {
+  background: rgba(216, 255, 62, 0.22);
+  border-color: var(--lime);
+  color: #fff;
+  transform: translateY(-1px);
+}
+.post-dl-btn-save {
+  background: rgba(124, 92, 255, 0.15);
+  color: #c4b5fd;
+  border-color: rgba(124, 92, 255, 0.45);
+}
+.post-dl-btn-save:hover, .post-dl-btn-save:focus-visible {
+  background: rgba(124, 92, 255, 0.28);
+  border-color: #a78bfa;
+  color: #fff;
+  transform: translateY(-1px);
+}
+.post-dl-btn-redownload {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--dim);
+  border-color: var(--line);
+}
+.post-dl-btn-redownload:hover, .post-dl-btn-redownload:focus-visible {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.3);
+  color: var(--bone);
+  transform: translateY(-1px);
 }
 
 /* ---------- footer ---------- */

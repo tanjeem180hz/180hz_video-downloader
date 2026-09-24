@@ -665,13 +665,13 @@ namespace TurboDownloader
                     string body = ReadBody(req);
                     HandleCreateDownload(res, body);
                 }
-                else if (rawUrl.StartsWith("/api/v1/downloads/") && req.HttpMethod == "GET")
+                else if (rawUrl.StartsWith("/api/v1/downloads/") && (req.HttpMethod == "GET" || req.HttpMethod == "HEAD"))
                 {
                     // Check if requesting file or job status
                     if (rawUrl.EndsWith("/file"))
                     {
                         string id = ExtractIdFromUrl(rawUrl, "/api/v1/downloads/", "/file");
-                        HandleDownloadFile(res, id);
+                        HandleDownloadFile(res, id, isHead);
                     }
                     else
                     {
@@ -791,6 +791,13 @@ namespace TurboDownloader
                 case ".svg": return "image/svg+xml";
                 case ".png": return "image/png";
                 case ".jpg": case ".jpeg": return "image/jpeg";
+                case ".mp4": return "video/mp4";
+                case ".webm": return "video/webm";
+                case ".mkv": return "video/x-matroska";
+                case ".mp3": return "audio/mpeg";
+                case ".m4a": return "audio/mp4";
+                case ".opus": return "audio/opus";
+                case ".wav": return "audio/wav";
                 default: return "application/octet-stream";
             }
         }
@@ -1557,7 +1564,7 @@ namespace TurboDownloader
         // ==========================================
         //  API: /api/v1/downloads/{id}/file
         // ==========================================
-        private static void HandleDownloadFile(HttpListenerResponse res, string id)
+        private static void HandleDownloadFile(HttpListenerResponse res, string id, bool isHead)
         {
             if (jobs.ContainsKey(id))
             {
@@ -1579,10 +1586,14 @@ namespace TurboDownloader
                     string fn = Path.GetFileName(job.filePath);
                     res.Headers.Add("Content-Disposition", string.Format("attachment; filename=\"{0}\"", fn));
                     res.ContentType = GetMimeType(job.filePath);
-                    using (FileStream fs = new FileStream(job.filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+                    FileInfo fi = new FileInfo(job.filePath);
+                    res.ContentLength64 = fi.Length;
+                    if (!isHead)
                     {
-                        res.ContentLength64 = fs.Length;
-                        fs.CopyTo(res.OutputStream);
+                        using (FileStream fs = new FileStream(job.filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+                        {
+                            fs.CopyTo(res.OutputStream);
+                        }
                     }
                     res.Close();
                     return;
@@ -1597,6 +1608,7 @@ namespace TurboDownloader
         // ==========================================
         private static void HandleOpenCompleted(HttpListenerResponse res, string id, string target)
         {
+            bool launched = false;
             if (jobs.ContainsKey(id))
             {
                 DownloadJob job = jobs[id];
@@ -1610,25 +1622,71 @@ namespace TurboDownloader
                     {
                         if (target == "file")
                         {
-                            try { Process.Start(job.filePath); } catch { }
+                            try
+                            {
+                                ProcessStartInfo psi = new ProcessStartInfo();
+                                psi.FileName = job.filePath;
+                                psi.UseShellExecute = true;
+                                Process.Start(psi);
+                                launched = true;
+                            }
+                            catch
+                            {
+                                try
+                                {
+                                    ProcessStartInfo psi = new ProcessStartInfo();
+                                    psi.FileName = "explorer.exe";
+                                    psi.Arguments = string.Format("/select,\"{0}\"", job.filePath);
+                                    psi.UseShellExecute = true;
+                                    Process.Start(psi);
+                                    launched = true;
+                                }
+                                catch { }
+                            }
                         }
                         else
                         {
-                            try { Process.Start("explorer.exe", string.Format("/select,\"{0}\"", job.filePath)); } catch { }
+                            try
+                            {
+                                ProcessStartInfo psi = new ProcessStartInfo();
+                                psi.FileName = "explorer.exe";
+                                psi.Arguments = string.Format("/select,\"{0}\"", job.filePath);
+                                psi.UseShellExecute = true;
+                                Process.Start(psi);
+                                launched = true;
+                            }
+                            catch
+                            {
+                                try
+                                {
+                                    string dir = Path.GetDirectoryName(job.filePath);
+                                    if (Directory.Exists(dir))
+                                    {
+                                        Process.Start("explorer.exe", dir);
+                                        launched = true;
+                                    }
+                                    else if (Directory.Exists(saveDir))
+                                    {
+                                        Process.Start("explorer.exe", saveDir);
+                                        launched = true;
+                                    }
+                                }
+                                catch { }
+                            }
                         }
                     }
                 }
                 else if (Directory.Exists(saveDir))
                 {
-                    try { Process.Start("explorer.exe", saveDir); } catch { }
+                    try { Process.Start("explorer.exe", saveDir); launched = true; } catch { }
                 }
             }
             else if (Directory.Exists(saveDir))
             {
-                try { Process.Start("explorer.exe", saveDir); } catch { }
+                try { Process.Start("explorer.exe", saveDir); launched = true; } catch { }
             }
 
-            SendJson(res, new { success = true });
+            SendJson(res, new { success = true, launched = launched });
         }
 
         private static string FormatBytes(long bytes)

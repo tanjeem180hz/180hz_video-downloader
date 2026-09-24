@@ -359,6 +359,51 @@ function nativeHandoff(url, filename) {
   a.remove();
 }
 
+async function triggerSaveAs(url, filename) {
+  const safeFilename = filename || "download.mp4";
+  if (typeof window !== "undefined" && "showSaveFilePicker" in window) {
+    try {
+      const ext = safeFilename.split('.').pop().toLowerCase() || 'mp4';
+      const isAudio = ext === 'mp3' || ext === 'm4a' || ext === 'wav' || ext === 'opus';
+      const mimeType = isAudio ? `audio/${ext}` : `video/${ext}`;
+      const handle = await window.showSaveFilePicker({
+        suggestedName: safeFilename,
+        types: [{
+          description: isAudio ? 'Audio File' : 'Video File',
+          accept: { [mimeType]: [`.${ext}`] }
+        }]
+      });
+      const writable = await handle.createWritable();
+      const res = await fetch(url);
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      await res.body.pipeTo(writable);
+      return;
+    } catch (err) {
+      if (err.name === 'AbortError') return; // User cancelled picker
+    }
+  }
+
+  // Blob URL fallback (prevents mixed-content blocking on HTTPS)
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const blob = await res.blob();
+    const blobUrl = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = blobUrl;
+    a.download = safeFilename;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => {
+      a.remove();
+      URL.revokeObjectURL(blobUrl);
+    }, 15000);
+    return;
+  } catch (err) {
+    nativeHandoff(url, safeFilename);
+  }
+}
+
 /* ---------------- console / analyzer ---------------- */
 (function consoleEngine() {
   const form = $("#consoleForm");
@@ -1179,18 +1224,33 @@ function nativeHandoff(url, filename) {
       const sizeText = sizeLabel ? ` (${sizeLabel})` : "";
       const currentFmt = fmt || selectedFormat;
       const isAudio = Boolean(currentFmt && (currentFmt.audioOnly || (currentFmt.container || "").toLowerCase() === "mp3" || (currentFmt.formatId || "").startsWith("mp3")));
-      const openLabel = isAudio ? "🎵 Open MP3 Audio" : "🎬 Open Video File";
+      const openLabel = isAudio ? "🎵 Open Audio" : "🎬 Open Video";
       const cacheKey = `${r.url}_${(currentFmt && currentFmt.formatId) || 'best'}_${(currentFmt && currentFmt.container) || 'mp4'}_${Boolean(currentFmt && currentFmt.audioOnly)}`;
+      const mediaFileName = `${completedJob.title || r.title || (isAudio ? "audio" : "video")}.${completedJob.requestedFormat || (isAudio ? "mp3" : "mp4")}`;
 
       msg.innerHTML = `
-        <div style="line-height:1.6;font-size:12px;">
-          <strong>✓ Saved to Downloads:</strong> ${escapeHtml(completedJob.title || r.title || (isAudio ? "audio" : "video"))}${sizeText}
-        </div>
-        <div style="margin-top:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-          <button type="button" class="chip" id="openVideoFileBtn" style="cursor:pointer;background:var(--lime);color:#000;font-weight:700;padding:7px 14px;border-radius:6px;box-shadow:0 0 14px rgba(216,255,62,0.25);">${openLabel}</button>
-          <button type="button" class="chip" id="openLocalFolderBtn" style="cursor:pointer;background:rgba(216,255,62,0.15);color:var(--lime);border:1px solid var(--lime);padding:7px 14px;border-radius:6px;">📂 Open in Downloads Folder</button>
-          <button type="button" class="chip" id="saveAsBtn" style="cursor:pointer;background:rgba(124,92,255,0.25);color:#c4b5fd;border:1px solid rgba(124,92,255,0.6);padding:7px 14px;border-radius:6px;">💾 Save As / Export</button>
-          <button type="button" class="chip" id="reDownloadBtn" style="cursor:pointer;background:rgba(255,255,255,0.06);color:var(--dim);padding:7px 12px;border-radius:6px;">🔄 Re-download</button>
+        <div class="post-dl-card">
+          <div class="post-dl-header">
+            <span class="post-dl-check">✓</span>
+            <span class="post-dl-title" title="${escapeHtml(completedJob.title || r.title || (isAudio ? 'Audio' : 'Video'))}">
+              Saved: <strong>${escapeHtml(completedJob.title || r.title || (isAudio ? "Audio" : "Video"))}</strong>
+            </span>
+            ${sizeText ? `<span class="post-dl-size">${sizeText}</span>` : ""}
+          </div>
+          <div class="post-dl-actions">
+            <button type="button" class="post-dl-btn post-dl-btn-primary" id="openVideoFileBtn" title="${openLabel}">
+              ${openLabel}
+            </button>
+            <button type="button" class="post-dl-btn post-dl-btn-view" id="openLocalFolderBtn" title="Highlight and view file in folder">
+              📂 View File
+            </button>
+            <button type="button" class="post-dl-btn post-dl-btn-save" id="saveAsBtn" title="Save file to custom folder">
+              💾 Save As
+            </button>
+            <button type="button" class="post-dl-btn post-dl-btn-redownload" id="reDownloadBtn" title="Force fresh re-download">
+              🔄 Re-download
+            </button>
+          </div>
         </div>
       `;
 
@@ -1203,34 +1263,62 @@ function nativeHandoff(url, filename) {
       setTimeout(() => {
         const ovb = document.getElementById("openVideoFileBtn");
         if (ovb) {
-          ovb.addEventListener("click", () => {
-            fetch(`${BACKEND_API_BASE}/downloads/${completedJob.id}/open?target=file`, { method: "POST" });
+          ovb.addEventListener("click", async (e) => {
+            e.preventDefault();
+            if (r.isLocalBackend || isDesktopEnvironment()) {
+              try {
+                const res = await fetch(`${BACKEND_API_BASE}/downloads/${completedJob.id}/open?target=file`, { method: "POST" });
+                if (!res.ok) throw new Error("Local open failed");
+              } catch (err) {
+                window.open(fileUrl, "_blank");
+              }
+            } else {
+              window.open(fileUrl, "_blank");
+            }
           });
         }
+
         const ofb = document.getElementById("openLocalFolderBtn");
         if (ofb) {
-          ofb.addEventListener("click", () => {
-            fetch(`${BACKEND_API_BASE}/downloads/${completedJob.id}/open`, { method: "POST" });
+          ofb.addEventListener("click", async (e) => {
+            e.preventDefault();
+            if (r.isLocalBackend || isDesktopEnvironment()) {
+              try {
+                const res = await fetch(`${BACKEND_API_BASE}/downloads/${completedJob.id}/open`, { method: "POST" });
+                if (!res.ok) throw new Error("Local folder open failed");
+              } catch (err) {
+                window.open(fileUrl, "_blank");
+              }
+            } else {
+              window.open(fileUrl, "_blank");
+            }
           });
         }
+
         const sab = document.getElementById("saveAsBtn");
         if (sab) {
-          sab.addEventListener("click", () => {
-            nativeHandoff(fileUrl, `${completedJob.title || r.title || "download"}.${completedJob.requestedFormat || (isAudio ? "mp3" : "mp4")}`);
+          sab.addEventListener("click", async (e) => {
+            e.preventDefault();
+            await triggerSaveAs(fileUrl, mediaFileName);
           });
         }
+
         const rdb = document.getElementById("reDownloadBtn");
         if (rdb) {
-          rdb.addEventListener("click", () => {
+          rdb.addEventListener("click", (e) => {
+            e.preventDefault();
             delete downloadedCache[cacheKey];
-            executeDownload(selectedFormat, true);
+            delete downloadedCache[r.url];
+            msg.className = "msg";
+            msg.innerHTML = "";
+            executeDownload(currentFmt || selectedFormat, true);
           });
         }
       }, 50);
 
       // ONLY trigger browser nativeHandoff if purely on remote web (no local desktop engine saving to disk)
       if (!isDesktopEnvironment() && !r.isLocalBackend) {
-        nativeHandoff(fileUrl, `${completedJob.title || r.title || "download"}.${completedJob.requestedFormat || (isAudio ? "mp3" : "mp4")}`);
+        nativeHandoff(fileUrl, mediaFileName);
       }
 
       Ledger.bump(r.url);
