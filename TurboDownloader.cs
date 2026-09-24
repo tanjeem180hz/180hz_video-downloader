@@ -352,30 +352,20 @@ namespace TurboDownloader
 
             foreach (int candidate in candidatePorts)
             {
-                string[] hosts = new string[] { "127.0.0.1", "localhost" };
-                foreach (string h in hosts)
+                HttpListener l = new HttpListener();
+                try
                 {
-                    HttpListener l = null;
-                    try
-                    {
-                        l = new HttpListener();
-                        l.Prefixes.Add(string.Format("http://{0}:{1}/", h, candidate));
-                        l.Start();
-                        listener = l;
-                        port = candidate;
-                        break;
-                    }
-                    catch
-                    {
-                        if (l != null)
-                        {
-                            try { l.Close(); } catch { }
-                        }
-                    }
-                }
-
-                if (listener != null && listener.IsListening)
+                    l.Prefixes.Add(string.Format("http://127.0.0.1:{0}/", candidate));
+                    try { l.Prefixes.Add(string.Format("http://localhost:{0}/", candidate)); } catch { }
+                    l.Start();
+                    listener = l;
+                    port = candidate;
                     break;
+                }
+                catch
+                {
+                    try { l.Close(); } catch { }
+                }
             }
 
             if (listener == null || !listener.IsListening)
@@ -1261,6 +1251,8 @@ namespace TurboDownloader
 
             string safeUrl = job.url.Replace("\"", "%22").Replace("\r", "").Replace("\n", "");
             bool isFacebook = safeUrl.IndexOf("facebook.com", StringComparison.OrdinalIgnoreCase) >= 0 || safeUrl.IndexOf("fb.watch", StringComparison.OrdinalIgnoreCase) >= 0;
+            bool isInstagram = safeUrl.IndexOf("instagram.com", StringComparison.OrdinalIgnoreCase) >= 0;
+            bool isSocial = isInstagram || isFacebook || safeUrl.IndexOf("tiktok.com", StringComparison.OrdinalIgnoreCase) >= 0 || safeUrl.IndexOf("twitter.com", StringComparison.OrdinalIgnoreCase) >= 0 || safeUrl.IndexOf("x.com", StringComparison.OrdinalIgnoreCase) >= 0;
 
             string formatArg;
             string mergeArg;
@@ -1314,30 +1306,30 @@ namespace TurboDownloader
                 if (heightMatch.Success)
                 {
                     int h = int.Parse(heightMatch.Groups[1].Value);
-                    if (isFacebook)
-                    {
-                        formatArg = string.Format("-f \"bestvideo[height<={0}]+bestaudio/best[height<={0}]/best[format_id*=hd]/best[ext=mp4]/best\"", h);
-                        mergeArg = "--merge-output-format mp4";
-                    }
-                    else if (isWebM)
+                    if (isWebM)
                     {
                         formatArg = string.Format("-f \"bestvideo[height<={0}][ext=webm]+bestaudio[ext=webm]/bestvideo[height<={0}]+bestaudio/best[height<={0}]/bv*+ba/b\"", h);
-                        mergeArg = "--merge-output-format webm/mkv";
+                        mergeArg = "--merge-output-format webm";
                     }
                     else
                     {
-                        formatArg = string.Format("-f \"bestvideo[height<={0}][vcodec^=avc1]+bestaudio[ext=m4a]/bestvideo[height<={0}][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<={0}]+bestaudio/best[height<={0}]/bv*+ba/b\"", h);
+                        formatArg = string.Format("-f \"best[height<={0}][ext=mp4]/bestvideo[height<={0}][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<={0}]+bestaudio/best[height<={0}]/bv*+ba/b\" -S \"res:{0},vcodec:h264,acodec:m4a\"", h);
                         mergeArg = "--merge-output-format mp4";
                     }
                 }
                 else if (isFacebook && (safeFormatId.IndexOf("hd", StringComparison.OrdinalIgnoreCase) >= 0 || safeFormatId == "best"))
                 {
-                    formatArg = "-f \"bestvideo+bestaudio/best[format_id*=hd]/best[ext=mp4]/best\"";
+                    formatArg = "-f \"best[format_id*=hd]/best[ext=mp4]/bestvideo+bestaudio/best\" -S \"vcodec:h264,acodec:m4a\"";
                     mergeArg = "--merge-output-format mp4";
                 }
                 else if (isFacebook && safeFormatId.IndexOf("sd", StringComparison.OrdinalIgnoreCase) >= 0)
                 {
-                    formatArg = "-f \"bestvideo[height<=480]+bestaudio/best[format_id*=sd]/best[height<=480]/best\"";
+                    formatArg = "-f \"best[format_id*=sd][height<=480]/bestvideo[height<=480]+bestaudio/best[height<=480]/best\" -S \"vcodec:h264,acodec:m4a\"";
+                    mergeArg = "--merge-output-format mp4";
+                }
+                else if (isSocial)
+                {
+                    formatArg = "-f \"best[ext=mp4]/bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best\" -S \"res,vcodec:h264,acodec:m4a\"";
                     mergeArg = "--merge-output-format mp4";
                 }
                 else if (string.IsNullOrEmpty(safeFormatId) || safeFormatId == "best")
@@ -1345,11 +1337,11 @@ namespace TurboDownloader
                     if (isWebM)
                     {
                         formatArg = "-f \"bv*[ext=webm]+ba[ext=webm]/bv*+ba/b\"";
-                        mergeArg = "--merge-output-format webm/mkv";
+                        mergeArg = "--merge-output-format webm";
                     }
                     else
                     {
-                        formatArg = "-f \"bestvideo[vcodec^=avc1]+bestaudio[ext=m4a]/bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best\"";
+                        formatArg = "-f \"best[ext=mp4]/bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo[vcodec^=avc1]+bestaudio[ext=m4a]/bestvideo+bestaudio/best\" -S \"res,vcodec:h264,acodec:m4a\"";
                         mergeArg = "--merge-output-format mp4";
                     }
                 }
@@ -1357,12 +1349,12 @@ namespace TurboDownloader
                 {
                     if (isWebM)
                     {
-                        formatArg = string.Format("-f \"{0}+bestaudio[ext=webm]/{0}+bestaudio[acodec=opus]/{0}+ba/{0}/bv*+ba/b\"", safeFormatId);
-                        mergeArg = "--merge-output-format webm/mkv";
+                        formatArg = string.Format("-f \"{0}[hasvid][hasaud]/{0}+bestaudio[ext=webm]/{0}+bestaudio[acodec=opus]/{0}+ba/{0}/bv*+ba/b\"", safeFormatId);
+                        mergeArg = "--merge-output-format webm";
                     }
                     else
                     {
-                        formatArg = string.Format("-f \"{0}+bestaudio[ext=m4a]/{0}+bestaudio/{0}/bv*+ba/b\"", safeFormatId);
+                        formatArg = string.Format("-f \"{0}[hasvid][hasaud]/{0}+bestaudio[ext=m4a]/{0}+bestaudio/{0}/bv*+ba/b\" -S \"vcodec:h264,acodec:m4a\"", safeFormatId);
                         mergeArg = "--merge-output-format mp4";
                     }
                 }
@@ -1433,6 +1425,31 @@ namespace TurboDownloader
                             {
                                 job.filePath = latest.FullName;
                                 job.title = Path.GetFileNameWithoutExtension(latest.FullName);
+                            }
+                        }
+                        catch { }
+                    }
+
+                    // Guarantee universal MP4 output: if output file is .mkv while container requested is mp4, remux cleanly
+                    if (!isAudio && safeContainer == "mp4" && !string.IsNullOrEmpty(job.filePath) && File.Exists(job.filePath) && job.filePath.EndsWith(".mkv", StringComparison.OrdinalIgnoreCase))
+                    {
+                        string targetMp4 = Path.ChangeExtension(job.filePath, ".mp4");
+                        try
+                        {
+                            ProcessStartInfo rpsi = new ProcessStartInfo();
+                            rpsi.FileName = ffmpeg;
+                            rpsi.Arguments = string.Format("-i \"{0}\" -c copy -movflags faststart \"{1}\" -y", job.filePath, targetMp4);
+                            rpsi.CreateNoWindow = true;
+                            rpsi.UseShellExecute = false;
+                            using (Process rp = Process.Start(rpsi))
+                            {
+                                rp.WaitForExit(30000);
+                                if (rp.ExitCode == 0 && File.Exists(targetMp4))
+                                {
+                                    try { File.Delete(job.filePath); } catch { }
+                                    job.filePath = targetMp4;
+                                    job.title = Path.GetFileNameWithoutExtension(targetMp4);
+                                }
                             }
                         }
                         catch { }

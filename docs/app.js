@@ -852,10 +852,6 @@ async function triggerSaveAs(url, filename) {
                 </button>
                 <div class="msg" id="ytDlMsg"></div>
               </div>
-              <button type="button" class="btn-mp3-quick" id="ytDlMp3QuickBtn" title="Direct 1-Click MP3 Download (320 kbps)">
-                <svg viewBox="0 0 24 24" class="ico" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
-                <span>MP3 Audio (320k)</span>
-              </button>
               <button class="btn-ghost hidden" id="ytDlCancel" aria-label="Cancel download">${IC.power}Cancel</button>
             </div>
 
@@ -900,7 +896,6 @@ async function triggerSaveAs(url, filename) {
     const text = $("#ytDlText");
     const msg = $("#ytDlMsg");
     const cancel = $("#ytDlCancel");
-    const mp3QuickBtn = $("#ytDlMp3QuickBtn");
     const panel = $("#ytOptionsPanel");
     const filterBox = $("#ytContainerFilters");
     const videoSection = $("#ytVideoSection");
@@ -972,6 +967,7 @@ async function triggerSaveAs(url, filename) {
         label: `320 kbps MP3`
       };
     }
+    updateButtonLabel();
 
     function renderOptions() {
       // 1. Video Section
@@ -1174,26 +1170,6 @@ async function triggerSaveAs(url, filename) {
             btn.focus();
           }
         });
-      });
-    }
-
-    if (mp3QuickBtn) {
-      mp3QuickBtn.addEventListener("click", () => {
-        if (isDownloading) return;
-        const targetMp3 = mp3Formats[0] || { formatId: "mp3-320k", container: "mp3", quality: "320k", audioOnly: true, label: "320 kbps (Lossless MP3)" };
-        selectedFormat = { ...targetMp3, audioOnly: true, container: "mp3", isBest: true, label: "320 kbps MP3" };
-        updateButtonLabel();
-        if (r.isLocalBackend || isDesktopEnvironment()) {
-          const cacheKey = `${r.url}_${selectedFormat.formatId}_mp3_true`;
-          const existing = downloadedCache[cacheKey];
-          if (existing) {
-            showCompletedUi(existing, selectedFormat);
-            return;
-          }
-          executeDownload(selectedFormat);
-        } else {
-          handleLaunchOrInstallDesktop(r.url);
-        }
       });
     }
 
