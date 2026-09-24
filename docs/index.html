@@ -93,10 +93,17 @@
             <input
               id="urlInput"
               type="text"
-              placeholder="Paste any link — direct file, video, audio…"
+              placeholder="Paste any link — YouTube, Insta, Facebook, direct file…"
               spellcheck="false"
               autocomplete="off"
             />
+            <button type="button" id="clearBtn" class="field-btn clear-btn hidden" aria-label="Clear link input" title="Clear">
+              <svg viewBox="0 0 24 24" class="ico" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+            </button>
+            <button type="button" id="pasteBtn" class="field-btn paste-btn" aria-label="Paste link from clipboard" title="Paste link">
+              <svg viewBox="0 0 24 24" class="ico" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg>
+              <span>Paste</span>
+            </button>
           </div>
           <button type="submit" id="analyzeBtn" class="btn-lime">
             <svg viewBox="0 0 24 24" class="ico"><path d="M13 2 4 14h6l-1 8 9-12h-6z" fill="currentColor"/></svg>
