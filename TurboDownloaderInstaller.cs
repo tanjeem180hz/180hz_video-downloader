@@ -35,6 +35,16 @@ namespace TurboDownloaderInstaller
                 Directory.CreateDirectory(installDir);
             }
 
+            // Close any existing instances before updating files
+            try
+            {
+                foreach (Process p in Process.GetProcessesByName("TurboDownloader"))
+                {
+                    try { p.Kill(); p.WaitForExit(3000); } catch { }
+                }
+            }
+            catch { }
+
             // Extract or copy application files
             ExtractResourceOrCopy("TurboDownloader.exe", Path.Combine(installDir, "TurboDownloader.exe"));
 
