@@ -74,6 +74,151 @@ namespace TurboDownloader
         private static string portFilePath;
         private static NotifyIcon trayIcon;
 
+        private static string ytdlpPath;
+        private static string ffmpegPath;
+        private static bool isDownloadingDeps = false;
+        private static string depStatusMessage = "Ready";
+
+        private static string FindSystemFFmpeg()
+        {
+            try
+            {
+                string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+                string wingetDir = Path.Combine(localAppData, @"Microsoft\WinGet");
+                if (Directory.Exists(wingetDir))
+                {
+                    string[] files = Directory.GetFiles(wingetDir, "ffmpeg.exe", SearchOption.AllDirectories);
+                    if (files.Length > 0 && File.Exists(files[0])) return files[0];
+                }
+                string envPath = Environment.GetEnvironmentVariable("PATH");
+                if (!string.IsNullOrEmpty(envPath))
+                {
+                    foreach (string p in envPath.Split(';'))
+                    {
+                        if (string.IsNullOrEmpty(p)) continue;
+                        string fp = Path.Combine(p.Trim(), "ffmpeg.exe");
+                        if (File.Exists(fp)) return fp;
+                    }
+                }
+            }
+            catch { }
+            return null;
+        }
+
+        private static bool DownloadFileWithFallback(string url, string targetPath)
+        {
+            string tempFile = targetPath + ".tmp";
+            try
+            {
+                if (File.Exists(tempFile)) File.Delete(tempFile);
+
+                string curlPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "curl.exe");
+                if (File.Exists(curlPath))
+                {
+                    ProcessStartInfo psi = new ProcessStartInfo();
+                    psi.FileName = curlPath;
+                    psi.Arguments = string.Format("-L \"{0}\" -o \"{1}\" --retry 3 --max-time 180 -s", url, tempFile);
+                    psi.UseShellExecute = false;
+                    psi.CreateNoWindow = true;
+                    using (Process p = Process.Start(psi))
+                    {
+                        p.WaitForExit();
+                        if (p.ExitCode == 0 && File.Exists(tempFile) && new FileInfo(tempFile).Length > 100000)
+                        {
+                            if (File.Exists(targetPath)) File.Delete(targetPath);
+                            File.Move(tempFile, targetPath);
+                            return true;
+                        }
+                    }
+                }
+
+                ServicePointManager.SecurityProtocol = (SecurityProtocolType)3072 | (SecurityProtocolType)768 | SecurityProtocolType.Tls;
+                using (WebClient wc = new WebClient())
+                {
+                    wc.Headers.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) TurboDownloader/2.0");
+                    wc.DownloadFile(url, tempFile);
+                    if (File.Exists(tempFile) && new FileInfo(tempFile).Length > 100000)
+                    {
+                        if (File.Exists(targetPath)) File.Delete(targetPath);
+                        File.Move(tempFile, targetPath);
+                        return true;
+                    }
+                }
+            }
+            catch { }
+            return false;
+        }
+
+        private static void EnsureDependencies()
+        {
+            if (File.Exists(ytdlpPath) && File.Exists(ffmpegPath))
+            {
+                depStatusMessage = "Ready";
+                return;
+            }
+
+            if (isDownloadingDeps) return;
+            isDownloadingDeps = true;
+
+            Task.Factory.StartNew(() =>
+            {
+                try
+                {
+                    // 1. Download yt-dlp.exe if missing
+                    if (!File.Exists(ytdlpPath))
+                    {
+                        depStatusMessage = "Downloading extraction engine (yt-dlp)...";
+                        string ytdlpUrl = "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe";
+                        DownloadFileWithFallback(ytdlpUrl, ytdlpPath);
+                    }
+
+                    // 2. Locate or download ffmpeg.exe if missing
+                    if (!File.Exists(ffmpegPath))
+                    {
+                        string sysFfmpeg = FindSystemFFmpeg();
+                        if (!string.IsNullOrEmpty(sysFfmpeg) && File.Exists(sysFfmpeg))
+                        {
+                            try { File.Copy(sysFfmpeg, ffmpegPath, true); } catch { }
+                        }
+                    }
+
+                    if (!File.Exists(ffmpegPath))
+                    {
+                        depStatusMessage = "Setting up ffmpeg...";
+                        try
+                        {
+                            ProcessStartInfo psi = new ProcessStartInfo();
+                            psi.FileName = "winget";
+                            psi.Arguments = "install --id yt-dlp.FFmpeg --accept-package-agreements --accept-source-agreements --silent";
+                            psi.UseShellExecute = false;
+                            psi.CreateNoWindow = true;
+                            using (Process p = Process.Start(psi))
+                            {
+                                p.WaitForExit(60000);
+                            }
+                            string sysFfmpeg = FindSystemFFmpeg();
+                            if (!string.IsNullOrEmpty(sysFfmpeg) && File.Exists(sysFfmpeg))
+                            {
+                                File.Copy(sysFfmpeg, ffmpegPath, true);
+                            }
+                        }
+                        catch { }
+                    }
+
+                    depStatusMessage = (File.Exists(ytdlpPath) && File.Exists(ffmpegPath)) ? "Ready" : "Partial";
+                }
+                catch (Exception ex)
+                {
+                    depStatusMessage = "Dependency check error";
+                    try { File.AppendAllText(Path.Combine(appDir, "dependencies.log"), ex.ToString() + "\r\n"); } catch { }
+                }
+                finally
+                {
+                    isDownloadingDeps = false;
+                }
+            });
+        }
+
         private static string GetNodePath()
         {
             if (File.Exists(@"C:\Program Files\nodejs\node.exe")) return @"C:\Program Files\nodejs\node.exe";
@@ -112,6 +257,18 @@ namespace TurboDownloader
                 appDir = AppDomain.CurrentDomain.BaseDirectory;
                 saveDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads");
                 if (!Directory.Exists(saveDir)) saveDir = appDir;
+
+                ytdlpPath = Path.Combine(appDir, "yt-dlp.exe");
+                ffmpegPath = Path.Combine(appDir, "ffmpeg.exe");
+                if (!File.Exists(ffmpegPath))
+                {
+                    string sysF = FindSystemFFmpeg();
+                    if (!string.IsNullOrEmpty(sysF) && File.Exists(sysF))
+                    {
+                        try { File.Copy(sysF, ffmpegPath, true); } catch { }
+                    }
+                }
+                EnsureDependencies();
 
                 portFilePath = Path.Combine(Path.GetTempPath(), "turbodownloader_180hz.port");
 
@@ -397,13 +554,71 @@ namespace TurboDownloader
             HttpListenerRequest req = ctx.Request;
             HttpListenerResponse res = ctx.Response;
 
-            res.Headers.Add("Access-Control-Allow-Origin", "*");
+            // Security Check 1: Reject any non-loopback connections (LAN/External protection)
+            if (!IPAddress.IsLoopback(req.RemoteEndPoint.Address))
+            {
+                res.StatusCode = 403;
+                res.StatusDescription = "Forbidden: Localhost Only";
+                res.Close();
+                return;
+            }
+
+            // Security Check 2: DNS Rebinding Protection (validate Host header)
+            string hostHeader = req.Headers["Host"];
+            if (!string.IsNullOrEmpty(hostHeader))
+            {
+                string hostName = hostHeader.Split(':')[0].Trim().ToLowerInvariant();
+                if (hostName != "localhost" && hostName != "127.0.0.1" && hostName != "::1" && hostName != "[::1]")
+                {
+                    res.StatusCode = 403;
+                    res.StatusDescription = "Forbidden: Invalid Host Header";
+                    res.Close();
+                    return;
+                }
+            }
+
+            // Security Check 3: Browser Security Headers
+            res.Headers.Add("X-Content-Type-Options", "nosniff");
+            res.Headers.Add("X-Frame-Options", "SAMEORIGIN");
+            res.Headers.Add("X-XSS-Protection", "1; mode=block");
+            res.Headers.Add("Referrer-Policy", "strict-origin-when-cross-origin");
+
+            // Security Check 4: Strict CORS Origin Validation
+            string origin = req.Headers["Origin"];
+            bool isTrustedOrigin = false;
+            if (string.IsNullOrEmpty(origin))
+            {
+                isTrustedOrigin = true; // Local direct browser or native window request
+            }
+            else
+            {
+                Uri originUri;
+                if (Uri.TryCreate(origin, UriKind.Absolute, out originUri))
+                {
+                    string h = originUri.Host.ToLowerInvariant();
+                    if (h == "127.0.0.1" || h == "localhost" || h == "tanjeem180hz.github.io")
+                    {
+                        isTrustedOrigin = true;
+                        res.Headers.Add("Access-Control-Allow-Origin", origin);
+                        res.Headers.Add("Access-Control-Allow-Credentials", "true");
+                    }
+                }
+            }
+
             res.Headers.Add("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-            res.Headers.Add("Access-Control-Allow-Headers", "Content-Type");
+            res.Headers.Add("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With");
 
             if (req.HttpMethod == "OPTIONS")
             {
                 res.StatusCode = 200;
+                res.Close();
+                return;
+            }
+
+            if (!isTrustedOrigin)
+            {
+                res.StatusCode = 403;
+                res.StatusDescription = "Forbidden: Untrusted Origin";
                 res.Close();
                 return;
             }
@@ -413,6 +628,18 @@ namespace TurboDownloader
 
             try
             {
+                // Engine Health & Status Check
+                if (rawUrl == "/api/v1/health" && req.HttpMethod == "GET")
+                {
+                    SendJson(res, new {
+                        success = true,
+                        engine = "TurboDownloader 2.0",
+                        status = depStatusMessage,
+                        isReady = File.Exists(ytdlpPath) && File.Exists(ffmpegPath),
+                        port = port
+                    });
+                    return;
+                }
                 // Serve Frontend
                 if (rawUrl == "/" || rawUrl == "/index.html")
                 {
@@ -583,7 +810,7 @@ namespace TurboDownloader
         private static void HandleMediaAnalyze(HttpListenerResponse res, string body)
         {
             Dictionary<string, object> reqObj = json.Deserialize<Dictionary<string, object>>(body);
-            string url = reqObj.ContainsKey("url") ? Convert.ToString(reqObj["url"]) : "";
+            string url = reqObj.ContainsKey("url") ? Convert.ToString(reqObj["url"]).Trim() : "";
 
             if (string.IsNullOrEmpty(url))
             {
@@ -592,8 +819,26 @@ namespace TurboDownloader
                 return;
             }
 
-            string ytdlp = Path.Combine(appDir, "yt-dlp.exe");
-            if (!File.Exists(ytdlp)) ytdlp = "yt-dlp.exe";
+            Uri parsedUri;
+            if (!Uri.TryCreate(url, UriKind.Absolute, out parsedUri) || 
+                (parsedUri.Scheme != Uri.UriSchemeHttp && parsedUri.Scheme != Uri.UriSchemeHttps))
+            {
+                res.StatusCode = 400;
+                SendJson(res, new { success = false, message = "Invalid URL protocol. Only HTTP and HTTPS URLs are permitted." });
+                return;
+            }
+
+            // Command injection defense: escape quotes and strip control characters
+            string safeUrl = url.Replace("\"", "%22").Replace("\r", "").Replace("\n", "");
+
+            string ytdlp = File.Exists(ytdlpPath) ? ytdlpPath : Path.Combine(appDir, "yt-dlp.exe");
+            if (!File.Exists(ytdlp))
+            {
+                EnsureDependencies();
+                res.StatusCode = 503;
+                SendJson(res, new { success = false, message = "Engine components are initializing (" + depStatusMessage + "). Please retry in 5 seconds." });
+                return;
+            }
 
             string np = GetNodePath();
             string jsRuntimeArg = !string.IsNullOrEmpty(np) ? string.Format("--js-runtimes node:\"{0}\"", np) : "";
@@ -604,7 +849,7 @@ namespace TurboDownloader
 
             ProcessStartInfo psi = new ProcessStartInfo();
             psi.FileName = ytdlp;
-            psi.Arguments = string.Format("{0} {1} {2} --dump-json --no-playlist \"{3}\"", jsRuntimeArg, extArgs, cookiesArg, url);
+            psi.Arguments = string.Format("{0} {1} {2} --dump-json --no-playlist \"{3}\"", jsRuntimeArg, extArgs, cookiesArg, safeUrl);
             psi.CreateNoWindow = true;
             psi.UseShellExecute = false;
             psi.RedirectStandardOutput = true;
@@ -810,11 +1055,27 @@ namespace TurboDownloader
         private static void HandleCreateDownload(HttpListenerResponse res, string body)
         {
             Dictionary<string, object> reqObj = json.Deserialize<Dictionary<string, object>>(body);
-            string url = reqObj.ContainsKey("url") ? Convert.ToString(reqObj["url"]) : "";
+            string url = reqObj.ContainsKey("url") ? Convert.ToString(reqObj["url"]).Trim() : "";
             string formatId = reqObj.ContainsKey("formatId") ? Convert.ToString(reqObj["formatId"]) : "best";
             string container = reqObj.ContainsKey("container") ? Convert.ToString(reqObj["container"]) : "mp4";
             string quality = reqObj.ContainsKey("quality") ? Convert.ToString(reqObj["quality"]) : "best";
             bool audioOnly = reqObj.ContainsKey("audioOnly") && Convert.ToBoolean(reqObj["audioOnly"]);
+
+            if (string.IsNullOrEmpty(url))
+            {
+                res.StatusCode = 400;
+                SendJson(res, new { success = false, message = "URL is required" });
+                return;
+            }
+
+            Uri parsedUri;
+            if (!Uri.TryCreate(url, UriKind.Absolute, out parsedUri) || 
+                (parsedUri.Scheme != Uri.UriSchemeHttp && parsedUri.Scheme != Uri.UriSchemeHttps))
+            {
+                res.StatusCode = 400;
+                SendJson(res, new { success = false, message = "Invalid URL protocol. Only HTTP and HTTPS URLs are permitted." });
+                return;
+            }
 
             string jobId = "job_" + Guid.NewGuid().ToString("N").Substring(0, 8);
 
@@ -837,31 +1098,43 @@ namespace TurboDownloader
 
         private static void RunDownloadProcess(DownloadJob job, string formatId, string container, string quality, bool audioOnly)
         {
-            string ytdlp = Path.Combine(appDir, "yt-dlp.exe");
-            if (!File.Exists(ytdlp)) ytdlp = "yt-dlp.exe";
+            string ytdlp = File.Exists(ytdlpPath) ? ytdlpPath : Path.Combine(appDir, "yt-dlp.exe");
+            string ffmpeg = File.Exists(ffmpegPath) ? ffmpegPath : Path.Combine(appDir, "ffmpeg.exe");
 
-            string ffmpeg = Path.Combine(appDir, "ffmpeg.exe");
+            if (!File.Exists(ytdlp) || !File.Exists(ffmpeg))
+            {
+                EnsureDependencies();
+            }
+
+            string safeFormatId = (formatId ?? "").Trim();
+            if (safeFormatId.StartsWith("-") || !Regex.IsMatch(safeFormatId, @"^[a-zA-Z0-9_\-\.\:\/]+$"))
+                safeFormatId = "best";
+
+            string safeContainer = (container ?? "mp4").Trim().ToLowerInvariant();
+            if (!Regex.IsMatch(safeContainer, @"^[a-zA-Z0-9]+$")) safeContainer = "mp4";
+
+            string safeUrl = job.url.Replace("\"", "%22").Replace("\r", "").Replace("\n", "");
 
             string formatArg;
             string mergeArg;
 
-            bool isWebM = string.Equals(container, "webm", StringComparison.OrdinalIgnoreCase);
+            bool isWebM = string.Equals(safeContainer, "webm", StringComparison.OrdinalIgnoreCase);
 
             if (audioOnly)
             {
                 formatArg = "-x --audio-format mp3 --audio-quality 0";
                 mergeArg = "";
             }
-            else if (!string.IsNullOrEmpty(formatId) && formatId != "best")
+            else if (!string.IsNullOrEmpty(safeFormatId) && safeFormatId != "best")
             {
                 if (isWebM)
                 {
-                    formatArg = string.Format("-f \"{0}+bestaudio[ext=webm]/{0}+bestaudio[acodec=opus]/{0}+ba/{0}/bv*+ba/b\"", formatId);
+                    formatArg = string.Format("-f \"{0}+bestaudio[ext=webm]/{0}+bestaudio[acodec=opus]/{0}+ba/{0}/bv*+ba/b\"", safeFormatId);
                     mergeArg = "--merge-output-format webm/mkv";
                 }
                 else
                 {
-                    formatArg = string.Format("-f \"{0}+bestaudio[ext=m4a]/{0}+bestaudio/{0}/bv*+ba/b\"", formatId);
+                    formatArg = string.Format("-f \"{0}+bestaudio[ext=m4a]/{0}+bestaudio/{0}/bv*+ba/b\"", safeFormatId);
                     mergeArg = "--merge-output-format mp4/mkv";
                 }
             }
@@ -888,7 +1161,7 @@ namespace TurboDownloader
             string cookiesArg = File.Exists(cookiesPath) ? string.Format("--cookies \"{0}\"", cookiesPath) : "";
 
             string args = string.Format("{0} {1} {2} {3} {4} --ffmpeg-location \"{5}\" --newline --no-playlist --no-mtime --windows-filenames -o \"{6}\" \"{7}\"",
-                jsRuntimeArg, extArgs, cookiesArg, formatArg, mergeArg, ffmpeg, outTemplate, job.url);
+                jsRuntimeArg, extArgs, cookiesArg, formatArg, mergeArg, ffmpeg, outTemplate, safeUrl);
 
             job.status = "DOWNLOADING";
 
@@ -1086,6 +1359,18 @@ namespace TurboDownloader
                 DownloadJob job = jobs[id];
                 if (!string.IsNullOrEmpty(job.filePath) && File.Exists(job.filePath))
                 {
+                    string fullPath = Path.GetFullPath(job.filePath);
+                    string fullSaveDir = Path.GetFullPath(saveDir);
+                    string fullAppDir = Path.GetFullPath(appDir);
+                    if (!fullPath.StartsWith(fullSaveDir, StringComparison.OrdinalIgnoreCase) &&
+                        !fullPath.StartsWith(fullAppDir, StringComparison.OrdinalIgnoreCase))
+                    {
+                        res.StatusCode = 403;
+                        res.StatusDescription = "Forbidden: Access Denied";
+                        res.Close();
+                        return;
+                    }
+
                     string fn = Path.GetFileName(job.filePath);
                     res.Headers.Add("Content-Disposition", string.Format("attachment; filename=\"{0}\"", fn));
                     res.ContentType = GetMimeType(job.filePath);
@@ -1110,13 +1395,23 @@ namespace TurboDownloader
             if (jobs.ContainsKey(id))
             {
                 DownloadJob job = jobs[id];
-                if (target == "file" && !string.IsNullOrEmpty(job.filePath) && File.Exists(job.filePath))
+                if (!string.IsNullOrEmpty(job.filePath) && File.Exists(job.filePath))
                 {
-                    try { Process.Start(job.filePath); } catch { }
-                }
-                else if (!string.IsNullOrEmpty(job.filePath) && File.Exists(job.filePath))
-                {
-                    try { Process.Start("explorer.exe", string.Format("/select,\"{0}\"", job.filePath)); } catch { }
+                    string fullPath = Path.GetFullPath(job.filePath);
+                    string fullSaveDir = Path.GetFullPath(saveDir);
+                    string fullAppDir = Path.GetFullPath(appDir);
+                    if (fullPath.StartsWith(fullSaveDir, StringComparison.OrdinalIgnoreCase) ||
+                        fullPath.StartsWith(fullAppDir, StringComparison.OrdinalIgnoreCase))
+                    {
+                        if (target == "file")
+                        {
+                            try { Process.Start(job.filePath); } catch { }
+                        }
+                        else
+                        {
+                            try { Process.Start("explorer.exe", string.Format("/select,\"{0}\"", job.filePath)); } catch { }
+                        }
+                    }
                 }
                 else if (Directory.Exists(saveDir))
                 {

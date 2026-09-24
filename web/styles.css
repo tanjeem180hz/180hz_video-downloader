@@ -78,6 +78,8 @@ body {
 .nav-meta { display: flex; align-items: center; gap: 24px; font-size: 10px; letter-spacing: .28em; text-transform: uppercase; color: var(--dim); }
 .nav-cta { color: var(--bone); text-decoration: none; border: 1px solid var(--line); padding: 8px 16px; transition: .25s; }
 .nav-cta:hover { border-color: var(--lime); color: var(--lime); }
+.nav-cta.accent { border-color: var(--lime); color: var(--lime); background: rgba(216, 255, 62, 0.08); font-weight: 500; display: inline-flex; align-items: center; gap: 6px; }
+.nav-cta.accent:hover { background: var(--lime); color: #000; border-color: var(--lime); }
 
 /* ---------- hero ---------- */
 .hero { position: relative; z-index: 5; min-height: 88vh; display: flex; flex-direction: column; justify-content: flex-end; padding: 0 48px 40px; }
