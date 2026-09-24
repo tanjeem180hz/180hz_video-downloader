@@ -72,29 +72,34 @@ namespace TurboDownloader
         {
             try
             {
-                ServicePointManager.SecurityProtocol = (SecurityProtocolType)3072 | (SecurityProtocolType)768 | SecurityProtocolType.Tls;
-                ServicePointManager.DefaultConnectionLimit = 512;
-                ServicePointManager.Expect100Continue = false;
-                ServicePointManager.UseNagleAlgorithm = false;
+                try
+                {
+                    ServicePointManager.SecurityProtocol = (SecurityProtocolType)3072 | (SecurityProtocolType)768 | SecurityProtocolType.Tls;
+                    ServicePointManager.DefaultConnectionLimit = 512;
+                    ServicePointManager.Expect100Continue = false;
+                    ServicePointManager.UseNagleAlgorithm = false;
+                }
+                catch { }
+
+                appDir = AppDomain.CurrentDomain.BaseDirectory;
+                saveDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads");
+                if (!Directory.Exists(saveDir)) saveDir = appDir;
+
+                // Start HTTP Server
+                StartHttpServer();
+
+                // Launch Desktop Application Window
+                LaunchNativeWindow();
+
+                // Keep Server Running
+                while (true)
+                {
+                    Thread.Sleep(2000);
+                }
             }
-            catch { }
-
-            appDir = AppDomain.CurrentDomain.BaseDirectory;
-            saveDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads");
-            if (!Directory.Exists(saveDir)) saveDir = appDir;
-
-            if (!File.Exists(nodePath)) nodePath = "node.exe";
-
-            // Start HTTP Server
-            StartHttpServer();
-
-            // Launch Desktop Application Window
-            LaunchNativeWindow();
-
-            // Keep Server Running
-            while (true)
+            catch (Exception ex)
             {
-                Thread.Sleep(2000);
+                File.WriteAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "crash.log"), ex.ToString());
             }
         }
 
