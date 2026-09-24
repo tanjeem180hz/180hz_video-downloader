@@ -922,7 +922,11 @@ function nativeHandoff(url, filename) {
           }
 
           togglePanel(false);
-          executeDownload(selectedFormat);
+          if (r.isLocalBackend) {
+            executeDownload(selectedFormat);
+          } else {
+            renderDirectWebWidget(selectedFormat);
+          }
         };
 
         el.addEventListener("click", handlePick);
@@ -964,7 +968,12 @@ function nativeHandoff(url, filename) {
 
     btn.addEventListener("click", () => {
       if (isDownloading) return;
-      togglePanel();
+      if (r.isLocalBackend) {
+        togglePanel();
+      } else {
+        renderDirectWebWidget(selectedFormat);
+        togglePanel();
+      }
     });
 
     panel.addEventListener("keydown", (e) => {
@@ -1109,35 +1118,68 @@ function nativeHandoff(url, filename) {
         btn.disabled = false;
         cancel.classList.add("hidden");
         fill.style.width = "100%";
-        text.textContent = "Stream Dispatched ✓";
-
-        const tunnelUrl = getWebTunnelUrl(r.url, r.provider);
-        const desktopUrl = `http://127.0.0.1:4000/?url=${encodeURIComponent(r.url)}`;
-
-        try {
-          window.open(tunnelUrl, "_blank", "noopener,noreferrer");
-        } catch {}
-
-        msg.className = "msg ok";
-        msg.innerHTML = `
-          <div style="margin-top:6px;line-height:1.6;">
-            <strong style="color:var(--lime);">🚀 Universal Download Stream Unlocked</strong><br>
-            <span style="color:var(--dim);font-size:12px;">Web tunnel opened in a new tab for instant download.</span>
-            <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">
-              <a href="${tunnelUrl}" target="_blank" rel="noopener noreferrer" class="chip" style="background:rgba(216,255,62,0.15);color:var(--lime);border:1px solid var(--lime);text-decoration:none;padding:6px 14px;font-family:var(--font-m);font-size:11px;display:inline-flex;align-items:center;gap:6px;">
-                ${IC.dl} Direct Web Download
-              </a>
-              <a href="${desktopUrl}" target="_blank" rel="noopener noreferrer" class="chip" style="background:rgba(124,92,255,0.25);color:#c4b5fd;border:1px solid rgba(124,92,255,0.6);text-decoration:none;padding:6px 14px;font-family:var(--font-m);font-size:11px;display:inline-flex;align-items:center;gap:6px;">
-                ${IC.zap} TurboDownloader Desktop (Lossless 4K/8K)
-              </a>
-            </div>
-          </div>
-        `;
+        text.textContent = "Direct Download Ready ✓";
+        renderDirectWebWidget(fmt);
         Ledger.bump(r.url);
       }
     }
 
+    function mapToDirectWebFormat(fmt) {
+      if (!fmt) return "1080";
+      if (fmt.audioOnly || fmt.formatId === "bestaudio" || fmt.container === "mp3") return "mp3";
+      const str = String(fmt.resolution || fmt.quality || fmt.formatId || "").toLowerCase();
+      if (str.includes("4320") || str.includes("8k")) return "8k";
+      if (str.includes("2160") || str.includes("4k")) return "4k";
+      if (str.includes("1440") || str.includes("2k")) return "1440";
+      if (str.includes("1080")) return "1080";
+      if (str.includes("720")) return "720";
+      if (str.includes("480")) return "480";
+      if (str.includes("360")) return "360";
+      return "1080";
+    }
+
+    function renderDirectWebWidget(fmt) {
+      const webFormat = mapToDirectWebFormat(fmt);
+      const widgetUrl = `https://loader.to/api/button/?url=${encodeURIComponent(r.url)}&f=${webFormat}`;
+      const formatLabel = fmt ? (fmt.label || getCanonicalResolution(fmt) || webFormat.toUpperCase()) : "1080p";
+
+      errContainer.innerHTML = `
+        <div class="direct-web-dl-card" style="margin-top:16px;background:rgba(216,255,62,0.05);border:1px solid rgba(216,255,62,0.3);border-radius:12px;padding:16px;animation:card-in .4s ease;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
+            <div style="display:flex;align-items:center;gap:8px;">
+              ${IC.dl}
+              <strong style="color:var(--lime);font-size:12px;letter-spacing:.12em;text-transform:uppercase;">DIRECT WEB DOWNLOAD READY</strong>
+            </div>
+            <span class="tag done" style="font-size:10px;">${escapeHtml(formatLabel)}</span>
+          </div>
+          <p style="font-size:12px;color:rgba(237,237,232,0.85);margin-bottom:12px;line-height:1.5;">
+            Direct stream extraction active for <strong>${escapeHtml(r.title || "video")}</strong>. Click below to download directly to your device without error:
+          </p>
+          <div style="background:#090a0f;border:1px solid rgba(255,255,255,0.08);border-radius:10px;overflow:hidden;min-height:64px;display:flex;align-items:center;justify-content:center;">
+            <iframe src="${widgetUrl}" style="width:100%;height:64px;border:none;display:block;" scrolling="no" allowtransparency="true" loading="eager"></iframe>
+          </div>
+          <div style="margin-top:12px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+            <a href="${widgetUrl}" target="_blank" rel="noopener noreferrer" class="chip" style="background:rgba(216,255,62,0.1);color:var(--lime);border:1px solid var(--lime);font-size:11px;padding:5px 12px;text-decoration:none;display:inline-flex;align-items:center;gap:6px;">
+              ${IC.dl} Direct Web Link
+            </a>
+            <a href="http://127.0.0.1:4000/?url=${encodeURIComponent(r.url)}" target="_blank" rel="noopener noreferrer" class="chip" style="background:rgba(124,92,255,0.2);color:#c4b5fd;border:1px solid rgba(124,92,255,0.5);font-size:11px;padding:5px 12px;text-decoration:none;display:inline-flex;align-items:center;gap:6px;">
+              ${IC.zap} Open in TurboDownloader Desktop (Lossless 4K/8K)
+            </a>
+          </div>
+        </div>
+      `;
+
+      fill.style.width = "100%";
+      text.textContent = "Direct Download Ready ✓";
+      isDownloading = false;
+      btn.disabled = false;
+      cancel.classList.add("hidden");
+    }
+
     renderOptions();
+    if (!r.isLocalBackend) {
+      renderDirectWebWidget(selectedFormat);
+    }
   }
 
   const LADDER = [
