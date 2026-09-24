@@ -400,6 +400,14 @@ body {
 .yt-opt-item:hover .yt-opt-action {
   opacity: 1;
 }
+.yt-opt-item.selected .yt-opt-action {
+  background: var(--lime);
+  color: #000;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 4px;
+  opacity: 1;
+}
 
 /* ---------- ledger ---------- */
 .ledger { margin-top: 64px; }

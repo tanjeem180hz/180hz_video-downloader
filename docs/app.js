@@ -434,10 +434,57 @@ function nativeHandoff(url, filename) {
     zone.innerHTML = `<div class="error-box">${IC.alert}<span>${escapeHtml(msg)}</span></div>`;
   }
 
+  function isDesktopEnvironment() {
+    if (typeof window === "undefined") return false;
+    const port = String(window.location.port || "");
+    const host = String(window.location.hostname || "").toLowerCase();
+    if (port === "4000" || host === "127.0.0.1" || host === "localhost") return true;
+    if (window.DESKTOP_CONNECTED === true) return true;
+    if (typeof localStorage !== "undefined" && localStorage.getItem("turbodownloader_installed") === "true") return true;
+    return false;
+  }
+
   const BACKEND_API_BASE = (function() {
     if (typeof window !== "undefined" && window.FLOWDOWN_API_URL) return window.FLOWDOWN_API_URL;
-    if (typeof location !== "undefined" && location.port === "4000") return `${location.origin}/api/v1`;
-    return "http://localhost:4000/api/v1";
+    if (typeof location !== "undefined" && (location.port === "4000" || location.hostname === "127.0.0.1" || location.hostname === "localhost")) return `${location.origin}/api/v1`;
+    return "http://127.0.0.1:4000/api/v1";
+  })();
+
+  function updateDesktopUiBadges() {
+    if (isDesktopEnvironment()) {
+      const navAppBtn = $("#navDownloadAppBtn");
+      if (navAppBtn) {
+        navAppBtn.textContent = "⚡ Engine Active";
+        navAppBtn.removeAttribute("download");
+        navAppBtn.href = "#console";
+        navAppBtn.title = "TurboDownloader Desktop Engine is Connected & Ready";
+        navAppBtn.style.background = "rgba(216,255,62,0.15)";
+        navAppBtn.style.color = "var(--lime)";
+        navAppBtn.style.border = "1px solid var(--lime)";
+      }
+      const heroAppBtn = $("#heroDownloadAppBtn");
+      if (heroAppBtn) {
+        heroAppBtn.innerHTML = "⚡ 180HZ ENGINE ACTIVE";
+        heroAppBtn.removeAttribute("download");
+        heroAppBtn.href = "#console";
+      }
+    }
+  }
+
+  // Proactively check if Desktop Engine is running locally on port 4000
+  (async function checkDesktopEngine() {
+    updateDesktopUiBadges();
+    try {
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), 1200);
+      const res = await fetch("http://127.0.0.1:4000/api/v1/health", { mode: "cors", signal: ctrl.signal });
+      clearTimeout(t);
+      if (res && res.ok) {
+        window.DESKTOP_CONNECTED = true;
+        if (typeof localStorage !== "undefined") localStorage.setItem("turbodownloader_installed", "true");
+        updateDesktopUiBadges();
+      }
+    } catch {}
   })();
 
   function formatDuration(sec) {
@@ -500,19 +547,24 @@ function nativeHandoff(url, filename) {
   function getUnlockedDefaultFormats(provider) {
     const isAudioOnly = provider === "AudioOnly";
     const videoFormats = isAudioOnly ? [] : [
-      { formatId: "best", quality: "Best Available", resolution: "Auto Max (4K/8K)", container: "mp4", fps: 60, vcodec: "AVC/AV1" },
-      { formatId: "2160p", quality: "4K UHD", resolution: "2160p / 4K", container: "mp4", fps: 60, vcodec: "AV1/VP9" },
-      { formatId: "1440p", quality: "2K QHD", resolution: "1440p", container: "mp4", fps: 60, vcodec: "VP9/AVC" },
-      { formatId: "1080p", quality: "Full HD", resolution: "1080p", container: "mp4", fps: 60, vcodec: "H.264" },
-      { formatId: "720p", quality: "HD", resolution: "720p", container: "mp4", fps: 30, vcodec: "H.264" },
-      { formatId: "480p", quality: "Standard", resolution: "480p", container: "mp4", fps: 30, vcodec: "H.264" },
-      { formatId: "360p", quality: "Low", resolution: "360p", container: "mp4", fps: 30, vcodec: "H.264" }
+      { formatId: "best", quality: "Best Available", resolution: "Auto Max (4K/8K)", container: "mp4", fps: 60, vcodec: "H.264 / AV1", filesizeFormatted: "Source" },
+      { formatId: "2160p", quality: "4K UHD", resolution: "2160p / 4K", container: "mp4", fps: 60, vcodec: "AV1 / VP9", filesizeFormatted: "High Bitrate" },
+      { formatId: "2160p-webm", quality: "4K UHD", resolution: "2160p / 4K", container: "webm", fps: 60, vcodec: "VP9", filesizeFormatted: "High Bitrate" },
+      { formatId: "1440p", quality: "2K QHD", resolution: "1440p", container: "mp4", fps: 60, vcodec: "VP9 / AVC", filesizeFormatted: "Standard" },
+      { formatId: "1440p-webm", quality: "2K QHD", resolution: "1440p", container: "webm", fps: 60, vcodec: "VP9", filesizeFormatted: "Standard" },
+      { formatId: "1080p", quality: "Full HD", resolution: "1080p", container: "mp4", fps: 60, vcodec: "H.264", filesizeFormatted: "1080p" },
+      { formatId: "1080p-webm", quality: "Full HD", resolution: "1080p", container: "webm", fps: 60, vcodec: "VP9", filesizeFormatted: "1080p" },
+      { formatId: "720p", quality: "HD", resolution: "720p", container: "mp4", fps: 30, vcodec: "H.264", filesizeFormatted: "720p" },
+      { formatId: "720p-webm", quality: "HD", resolution: "720p", container: "webm", fps: 30, vcodec: "VP9", filesizeFormatted: "720p" },
+      { formatId: "480p", quality: "Standard", resolution: "480p", container: "mp4", fps: 30, vcodec: "H.264", filesizeFormatted: "480p" },
+      { formatId: "360p", quality: "Low", resolution: "360p", container: "mp4", fps: 30, vcodec: "H.264", filesizeFormatted: "360p" }
     ];
 
     const audioFormats = [
-      { formatId: "bestaudio", quality: "Best Audio", label: "Lossless / 320 kbps", container: "mp3", bitrateKbps: 320, codec: "MP3" },
-      { formatId: "192k", quality: "High Quality", label: "High / 192 kbps", container: "mp3", bitrateKbps: 192, codec: "MP3" },
-      { formatId: "128k", quality: "Standard Quality", label: "Standard / 128 kbps", container: "m4a", bitrateKbps: 128, codec: "AAC" }
+      { formatId: "bestaudio", quality: "Best Audio", label: "Lossless / 320 kbps", container: "mp3", bitrateKbps: 320, codec: "MP3", filesizeFormatted: "320k" },
+      { formatId: "192k", quality: "High Quality", label: "High / 192 kbps", container: "mp3", bitrateKbps: 192, codec: "MP3", filesizeFormatted: "192k" },
+      { formatId: "128k", quality: "Standard Quality", label: "Standard / 128 kbps", container: "m4a", bitrateKbps: 128, codec: "AAC", filesizeFormatted: "128k" },
+      { formatId: "opus", quality: "Opus Audio", label: "Opus / 160 kbps", container: "webm", bitrateKbps: 160, codec: "Opus", filesizeFormatted: "160k" }
     ];
 
     return { videoFormats, audioFormats };
@@ -635,6 +687,11 @@ function nativeHandoff(url, filename) {
           title = `YouTube Video (${match[1]})`;
         }
       }
+    } else if (url.includes("instagram.com") || url.includes("facebook.com") || url.includes("fb.watch") || url.includes("tiktok.com")) {
+      const match = /(?:reel|p|tv|shorts|watch\?v=|\/video\/)([A-Za-z0-9_\-]+)/.exec(url);
+      if (match && match[1] && (title.startsWith("Universal") || title.startsWith("Social"))) {
+        title = `${provider || "Media"} (${match[1]})`;
+      }
     }
 
     const { videoFormats, audioFormats } = getUnlockedDefaultFormats(provider);
@@ -650,8 +707,8 @@ function nativeHandoff(url, filename) {
       videoFormats,
       audioFormats,
       subtitles: [],
-      isLocalBackend: false,
-      note: "Universal stream unlocked — bit-exact download pipeline ready.",
+      isLocalBackend: isDesktopEnvironment(),
+      note: "Universal stream unlocked — select format to download bit-exact media.",
     };
   }
 
@@ -835,7 +892,7 @@ function nativeHandoff(url, filename) {
             </div>
             <div class="yt-opt-meta">
               ${bestSize ? `<span class="yt-opt-size">${escapeHtml(bestSize)}</span>` : ""}
-              <span class="yt-opt-action">${IC.dl}Select</span>
+              <span class="yt-opt-action">${isBestSelected ? `${IC.zap} Ready` : `${IC.dl} Select`}</span>
             </div>
           </div>
         `;
@@ -861,7 +918,7 @@ function nativeHandoff(url, filename) {
               </div>
               <div class="yt-opt-meta">
                 ${size ? `<span class="yt-opt-size">${escapeHtml(size)}</span>` : ""}
-                <span class="yt-opt-action">${IC.dl}Select</span>
+                <span class="yt-opt-action">${isSelected ? `${IC.zap} Ready` : `${IC.dl} Select`}</span>
               </div>
             </div>
           `;
@@ -892,7 +949,7 @@ function nativeHandoff(url, filename) {
             </div>
             <div class="yt-opt-meta">
               ${bestAudSize ? `<span class="yt-opt-size">${escapeHtml(bestAudSize)}</span>` : ""}
-              <span class="yt-opt-action">${IC.dl}Select</span>
+              <span class="yt-opt-action">${isBestAudSelected ? `${IC.zap} Ready` : `${IC.dl} Select`}</span>
             </div>
           </div>
         `;
@@ -914,7 +971,7 @@ function nativeHandoff(url, filename) {
               </div>
               <div class="yt-opt-meta">
                 ${size ? `<span class="yt-opt-size">${escapeHtml(size)}</span>` : ""}
-                <span class="yt-opt-action">${IC.dl}Select</span>
+                <span class="yt-opt-action">${isSelected ? `${IC.zap} Ready` : `${IC.dl} Select`}</span>
               </div>
             </div>
           `;
@@ -925,27 +982,38 @@ function nativeHandoff(url, filename) {
       audioList.innerHTML = audioHtml;
 
       $$(".yt-opt-item", panel).forEach((el) => {
-        const handlePick = () => {
+        const handlePick = (e) => {
           const type = el.dataset.optType;
+          let wasAlreadySelected = false;
+
           if (type === "video-best") {
             const best = filteredVideo[0];
+            wasAlreadySelected = selectedFormat && selectedFormat.isBest && !selectedFormat.audioOnly;
             selectedFormat = { ...best, isBest: true, label: `Best (${getCanonicalResolution(best)})` };
           } else if (type === "video") {
             const fmt = filteredVideo[Number(el.dataset.idx)];
+            wasAlreadySelected = selectedFormat && !selectedFormat.isBest && selectedFormat.formatId === fmt.formatId;
             selectedFormat = { ...fmt, isBest: false, label: getCanonicalResolution(fmt) };
           } else if (type === "audio-best") {
             const best = filteredAudio[0];
+            wasAlreadySelected = selectedFormat && selectedFormat.isBest && selectedFormat.audioOnly;
             selectedFormat = { ...best, audioOnly: true, isBest: true, label: "Best Audio" };
           } else if (type === "audio") {
             const fmt = filteredAudio[Number(el.dataset.idx)];
+            wasAlreadySelected = selectedFormat && !selectedFormat.isBest && selectedFormat.formatId === fmt.formatId;
             selectedFormat = { ...fmt, audioOnly: true, isBest: false, label: fmt.label || fmt.formatId };
           }
 
-          togglePanel(false);
-          if (r.isLocalBackend) {
-            executeDownload(selectedFormat);
-          } else {
-            handleLaunchOrInstallDesktop(r.url);
+          updateButtonLabel();
+          renderOptions();
+
+          const isActionClick = e && e.target && (e.target.closest(".yt-opt-action") || e.target.classList.contains("yt-opt-action"));
+          if (wasAlreadySelected || isActionClick) {
+            if (r.isLocalBackend || isDesktopEnvironment()) {
+              executeDownload(selectedFormat);
+            } else {
+              handleLaunchOrInstallDesktop(r.url);
+            }
           }
         };
 
@@ -953,7 +1021,7 @@ function nativeHandoff(url, filename) {
         el.addEventListener("keydown", (e) => {
           if (e.key === "Enter" || e.key === " ") {
             e.preventDefault();
-            handlePick();
+            handlePick(e);
           } else if (e.key === "ArrowDown") {
             e.preventDefault();
             const next = el.nextElementSibling?.classList.contains("yt-opt-item") ? el.nextElementSibling : el.nextElementSibling?.nextElementSibling;
@@ -971,13 +1039,17 @@ function nativeHandoff(url, filename) {
       });
     }
 
+    function updateButtonLabel() {
+      const selName = selectedFormat ? selectedFormat.label : "Video";
+      const cont = selectedFormat && selectedFormat.container ? ` [${selectedFormat.container.toUpperCase()}]` : "";
+      text.textContent = `⚡ Start Download — ${selName}${cont}`;
+    }
+
     function togglePanel(open) {
       const willOpen = typeof open === "boolean" ? open : panel.classList.contains("hidden");
       panel.classList.toggle("hidden", !willOpen);
       btn.setAttribute("aria-expanded", String(willOpen));
-      const arrow = willOpen ? "▲" : "▼";
-      const selName = selectedFormat ? selectedFormat.label : "Video";
-      text.textContent = `Download ${selName} ${arrow}`;
+      updateButtonLabel();
 
       if (willOpen) {
         renderOptions();
@@ -988,8 +1060,8 @@ function nativeHandoff(url, filename) {
 
     btn.addEventListener("click", () => {
       if (isDownloading) return;
-      if (r.isLocalBackend) {
-        togglePanel();
+      if (r.isLocalBackend || isDesktopEnvironment()) {
+        executeDownload(selectedFormat);
       } else {
         handleLaunchOrInstallDesktop(r.url);
       }
@@ -1136,9 +1208,27 @@ function nativeHandoff(url, filename) {
         isDownloading = false;
         btn.disabled = false;
         cancel.classList.add("hidden");
-        fill.style.width = "100%";
-        text.textContent = "Download via App (.exe) ▼";
-        renderDesktopInstallerCard(fmt);
+        fill.style.width = "0%";
+        updateButtonLabel();
+
+        if (isDesktopEnvironment() || r.isLocalBackend) {
+          errContainer.innerHTML = `
+            <div class="error-box" style="margin-top:16px;">
+              ${IC.alert}
+              <div>
+                <strong>Download could not be started</strong>
+                <p style="margin-top:4px;">${escapeHtml(err && err.message ? err.message : "Failed to connect to local engine.")}</p>
+                <button type="button" class="chip" id="retryDownloadBtn" style="margin-top:8px;cursor:pointer;background:rgba(216,255,62,0.15);color:var(--lime);border:1px solid var(--lime);">🔄 Retry Download</button>
+              </div>
+            </div>
+          `;
+          setTimeout(() => {
+            const rb = document.getElementById("retryDownloadBtn");
+            if (rb) rb.addEventListener("click", () => executeDownload(selectedFormat));
+          }, 50);
+        } else {
+          renderDesktopInstallerCard(fmt);
+        }
         Ledger.bump(r.url);
       }
     }
@@ -1162,6 +1252,9 @@ function nativeHandoff(url, filename) {
       if (isRunning) {
         window.open(`http://127.0.0.1:4000/?url=${encodeURIComponent(mediaUrl)}`, "_blank");
       } else {
+        if (typeof localStorage !== "undefined") {
+          localStorage.setItem("turbodownloader_installed", "true");
+        }
         // Automatically trigger 1-click download of TurboDownloaderSetup.exe
         const a = document.createElement("a");
         a.href = "TurboDownloaderSetup.exe";
@@ -1175,6 +1268,8 @@ function nativeHandoff(url, filename) {
     }
 
     function renderDesktopInstallerCard(fmt) {
+      if (isDesktopEnvironment() || r.isLocalBackend) return;
+
       const formatLabel = fmt ? (fmt.label || getCanonicalResolution(fmt) || "Lossless 4K/8K") : "Lossless 4K/8K";
 
       errContainer.innerHTML = `
@@ -1222,7 +1317,11 @@ function nativeHandoff(url, filename) {
     }
 
     renderOptions();
-    if (!r.isLocalBackend) {
+    panel.classList.remove("hidden");
+    btn.setAttribute("aria-expanded", "true");
+    updateButtonLabel();
+
+    if (!r.isLocalBackend && !isDesktopEnvironment()) {
       renderDesktopInstallerCard(selectedFormat);
     }
   }

@@ -866,8 +866,27 @@ namespace TurboDownloader
 
                     if (string.IsNullOrEmpty(output))
                     {
-                        res.StatusCode = 400;
-                        SendJson(res, new { success = false, message = "Could not analyze link: " + err });
+                        string inferredTitle = "Media Stream";
+                        try
+                        {
+                            Match m = Regex.Match(safeUrl, @"(?:reel|p|tv|shorts|watch\?v=|\/)([A-Za-z0-9_\-]+)");
+                            if (m.Success && !string.IsNullOrEmpty(m.Groups[1].Value))
+                                inferredTitle = "Media Stream (" + m.Groups[1].Value + ")";
+                        }
+                        catch { }
+
+                        SendJson(res, new {
+                            success = true,
+                            data = new {
+                                title = inferredTitle,
+                                creator = "",
+                                thumbnailUrl = "",
+                                durationSeconds = 0,
+                                platformMediaId = "",
+                                videoFormats = GetDefaultVideoFormats(),
+                                audioFormats = GetDefaultAudioFormats()
+                            }
+                        });
                         return;
                     }
 
@@ -1049,6 +1068,33 @@ namespace TurboDownloader
             }
         }
 
+        private static List<VideoFormatDto> GetDefaultVideoFormats()
+        {
+            List<VideoFormatDto> list = new List<VideoFormatDto>();
+            list.Add(new VideoFormatDto { formatId = "best", resolution = "Auto Max (4K/8K)", container = "mp4", fps = 60, vcodec = "H.264 / AV1", filesizeFormatted = "Source" });
+            list.Add(new VideoFormatDto { formatId = "2160p", resolution = "2160p / 4K", container = "mp4", fps = 60, vcodec = "AV1 / VP9", width = 3840, height = 2160, filesizeFormatted = "High Bitrate" });
+            list.Add(new VideoFormatDto { formatId = "2160p", resolution = "2160p / 4K", container = "webm", fps = 60, vcodec = "VP9", width = 3840, height = 2160, filesizeFormatted = "High Bitrate" });
+            list.Add(new VideoFormatDto { formatId = "1440p", resolution = "1440p", container = "mp4", fps = 60, vcodec = "VP9 / AVC", width = 2560, height = 1440 });
+            list.Add(new VideoFormatDto { formatId = "1440p", resolution = "1440p", container = "webm", fps = 60, vcodec = "VP9", width = 2560, height = 1440 });
+            list.Add(new VideoFormatDto { formatId = "1080p", resolution = "1080p", container = "mp4", fps = 60, vcodec = "H.264", width = 1920, height = 1080 });
+            list.Add(new VideoFormatDto { formatId = "1080p", resolution = "1080p", container = "webm", fps = 60, vcodec = "VP9", width = 1920, height = 1080 });
+            list.Add(new VideoFormatDto { formatId = "720p", resolution = "720p", container = "mp4", fps = 30, vcodec = "H.264", width = 1280, height = 720 });
+            list.Add(new VideoFormatDto { formatId = "720p", resolution = "720p", container = "webm", fps = 30, vcodec = "VP9", width = 1280, height = 720 });
+            list.Add(new VideoFormatDto { formatId = "480p", resolution = "480p", container = "mp4", fps = 30, vcodec = "H.264", width = 854, height = 480 });
+            list.Add(new VideoFormatDto { formatId = "360p", resolution = "360p", container = "mp4", fps = 30, vcodec = "H.264", width = 640, height = 360 });
+            return list;
+        }
+
+        private static List<AudioFormatDto> GetDefaultAudioFormats()
+        {
+            List<AudioFormatDto> list = new List<AudioFormatDto>();
+            list.Add(new AudioFormatDto { formatId = "bestaudio", label = "Lossless / 320 kbps", container = "mp3", bitrateKbps = 320, codec = "MP3", filesizeFormatted = "320k" });
+            list.Add(new AudioFormatDto { formatId = "192k", label = "High / 192 kbps", container = "mp3", bitrateKbps = 192, codec = "MP3", filesizeFormatted = "192k" });
+            list.Add(new AudioFormatDto { formatId = "128k", label = "Standard / 128 kbps", container = "m4a", bitrateKbps = 128, codec = "AAC", filesizeFormatted = "128k" });
+            list.Add(new AudioFormatDto { formatId = "opus", label = "Opus / 160 kbps", container = "webm", bitrateKbps = 160, codec = "Opus", filesizeFormatted = "160k" });
+            return list;
+        }
+
         // ==========================================
         //  API: /api/v1/downloads
         // ==========================================
@@ -1118,37 +1164,66 @@ namespace TurboDownloader
             string formatArg;
             string mergeArg;
 
-            bool isWebM = string.Equals(safeContainer, "webm", StringComparison.OrdinalIgnoreCase);
+            bool isWebM = string.Equals(safeContainer, "webm", StringComparison.OrdinalIgnoreCase) || safeFormatId.EndsWith("-webm", StringComparison.OrdinalIgnoreCase);
 
-            if (audioOnly)
+            if (audioOnly || safeFormatId == "bestaudio" || safeFormatId == "192k" || safeFormatId == "128k" || safeFormatId == "opus")
             {
-                formatArg = "-x --audio-format mp3 --audio-quality 0";
-                mergeArg = "";
-            }
-            else if (!string.IsNullOrEmpty(safeFormatId) && safeFormatId != "best")
-            {
-                if (isWebM)
+                if (string.Equals(safeContainer, "m4a", StringComparison.OrdinalIgnoreCase))
                 {
-                    formatArg = string.Format("-f \"{0}+bestaudio[ext=webm]/{0}+bestaudio[acodec=opus]/{0}+ba/{0}/bv*+ba/b\"", safeFormatId);
-                    mergeArg = "--merge-output-format webm/mkv";
+                    formatArg = "-x --audio-format m4a --audio-quality 0";
+                }
+                else if (string.Equals(safeContainer, "webm", StringComparison.OrdinalIgnoreCase) || string.Equals(safeContainer, "opus", StringComparison.OrdinalIgnoreCase))
+                {
+                    formatArg = "-x --audio-format opus";
                 }
                 else
                 {
-                    formatArg = string.Format("-f \"{0}+bestaudio[ext=m4a]/{0}+bestaudio/{0}/bv*+ba/b\"", safeFormatId);
-                    mergeArg = "--merge-output-format mp4/mkv";
+                    formatArg = "-x --audio-format mp3 --audio-quality 0";
                 }
+                mergeArg = "";
             }
             else
             {
-                if (isWebM)
+                Match heightMatch = Regex.Match(safeFormatId, @"^(\d+)p");
+                if (heightMatch.Success)
                 {
-                    formatArg = "-f \"bv*[ext=webm]+ba[ext=webm]/bv*+ba/b\"";
-                    mergeArg = "--merge-output-format webm/mkv";
+                    int h = int.Parse(heightMatch.Groups[1].Value);
+                    if (isWebM)
+                    {
+                        formatArg = string.Format("-f \"bestvideo[height<={0}][ext=webm]+bestaudio[ext=webm]/bestvideo[height<={0}][ext=webm]+bestaudio/bestvideo[height<={0}]+bestaudio/best[height<={0}]/bv*+ba/b\"", h);
+                        mergeArg = "--merge-output-format webm/mkv";
+                    }
+                    else
+                    {
+                        formatArg = string.Format("-f \"bestvideo[height<={0}][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<={0}][ext=mp4]+bestaudio/bestvideo[height<={0}]+bestaudio/best[height<={0}]/bv*+ba/b\"", h);
+                        mergeArg = "--merge-output-format mp4/mkv";
+                    }
+                }
+                else if (string.IsNullOrEmpty(safeFormatId) || safeFormatId == "best")
+                {
+                    if (isWebM)
+                    {
+                        formatArg = "-f \"bv*[ext=webm]+ba[ext=webm]/bv*+ba/b\"";
+                        mergeArg = "--merge-output-format webm/mkv";
+                    }
+                    else
+                    {
+                        formatArg = "-f \"bv*[ext=mp4]+ba[ext=m4a]/bv*+ba/b\"";
+                        mergeArg = "--merge-output-format mp4/mkv";
+                    }
                 }
                 else
                 {
-                    formatArg = "-f \"bv*+ba/b\"";
-                    mergeArg = "--merge-output-format mp4/mkv";
+                    if (isWebM)
+                    {
+                        formatArg = string.Format("-f \"{0}+bestaudio[ext=webm]/{0}+bestaudio[acodec=opus]/{0}+ba/{0}/bv*+ba/b\"", safeFormatId);
+                        mergeArg = "--merge-output-format webm/mkv";
+                    }
+                    else
+                    {
+                        formatArg = string.Format("-f \"{0}+bestaudio[ext=m4a]/{0}+bestaudio/{0}/bv*+ba/b\"", safeFormatId);
+                        mergeArg = "--merge-output-format mp4/mkv";
+                    }
                 }
             }
 
