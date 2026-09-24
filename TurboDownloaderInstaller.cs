@@ -47,6 +47,7 @@ namespace TurboDownloaderInstaller
             ExtractResourceOrCopy("index.html", Path.Combine(installDir, "index.html"));
             ExtractResourceOrCopy("styles.css", Path.Combine(installDir, "styles.css"));
             ExtractResourceOrCopy("app.js", Path.Combine(installDir, "app.js"));
+            ExtractResourceOrCopy("app.ico", Path.Combine(installDir, "app.ico"));
 
             // Create Desktop and Start Menu Shortcuts
             CreateShortcuts(Path.Combine(installDir, "TurboDownloader.exe"));
@@ -145,10 +146,14 @@ namespace TurboDownloaderInstaller
 
                     string desktop = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
                     string desktopLnk = Path.Combine(desktop, "TurboDownloader 8K.lnk");
+                    string icoPath = Path.Combine(Path.GetDirectoryName(exePath), "app.ico");
+
                     var sc = shell.CreateShortcut(desktopLnk);
                     sc.TargetPath = exePath;
                     sc.WorkingDirectory = Path.GetDirectoryName(exePath);
                     sc.Description = "TurboDownloader 2.0 - Bit-Exact 4K/8K Media Downloader";
+                    if (File.Exists(icoPath)) sc.IconLocation = icoPath + ",0";
+                    else sc.IconLocation = exePath + ",0";
                     sc.Save();
 
                     string startMenu = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.StartMenu), "Programs");
@@ -157,6 +162,8 @@ namespace TurboDownloaderInstaller
                     sc2.TargetPath = exePath;
                     sc2.WorkingDirectory = Path.GetDirectoryName(exePath);
                     sc2.Description = "TurboDownloader 2.0 - Bit-Exact 4K/8K Media Downloader";
+                    if (File.Exists(icoPath)) sc2.IconLocation = icoPath + ",0";
+                    else sc2.IconLocation = exePath + ",0";
                     sc2.Save();
                 }
             }

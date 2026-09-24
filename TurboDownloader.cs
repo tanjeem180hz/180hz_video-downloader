@@ -445,7 +445,16 @@ namespace TurboDownloader
 
                 trayIcon = new NotifyIcon();
                 trayIcon.Text = string.Format("180hz TurboDownloader (Port {0})", port);
-                trayIcon.Icon = SystemIcons.Application;
+                try
+                {
+                    string icoPath = Path.Combine(appDir, "app.ico");
+                    if (File.Exists(icoPath)) trayIcon.Icon = new Icon(icoPath);
+                    else trayIcon.Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
+                }
+                catch
+                {
+                    trayIcon.Icon = SystemIcons.Application;
+                }
                 trayIcon.Visible = true;
 
                 ContextMenu menu = new ContextMenu();

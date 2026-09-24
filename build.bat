@@ -9,14 +9,14 @@ if not exist "%CSC%" (
     exit /b 1
 )
 
-"%CSC%" /target:winexe /optimize+ /r:System.dll,System.Core.dll,System.Drawing.dll,System.Windows.Forms.dll,System.Web.Extensions.dll /out:"TurboDownloader.exe" "TurboDownloader.cs"
+"%CSC%" /target:winexe /optimize+ /win32icon:app.ico /r:System.dll,System.Core.dll,System.Drawing.dll,System.Windows.Forms.dll,System.Web.Extensions.dll /out:"TurboDownloader.exe" "TurboDownloader.cs"
 if %ERRORLEVEL% NEQ 0 (
     echo BUILD FAILED for TurboDownloader.exe!
     exit /b 1
 )
 
 echo Compiling TurboDownloaderSetup.exe installer...
-"%CSC%" /target:winexe /optimize+ /r:System.dll,System.Core.dll,System.Drawing.dll,System.Windows.Forms.dll /resource:TurboDownloader.exe /resource:web\index.html,index.html /resource:web\styles.css,styles.css /resource:web\app.js,app.js /out:"TurboDownloaderSetup.exe" "TurboDownloaderInstaller.cs"
+"%CSC%" /target:winexe /optimize+ /win32icon:setup.ico /r:System.dll,System.Core.dll,System.Drawing.dll,System.Windows.Forms.dll /resource:TurboDownloader.exe /resource:app.ico,app.ico /resource:web\index.html,index.html /resource:web\styles.css,styles.css /resource:web\app.js,app.js /out:"TurboDownloaderSetup.exe" "TurboDownloaderInstaller.cs"
 if %ERRORLEVEL% NEQ 0 (
     echo BUILD FAILED for TurboDownloaderSetup.exe!
     exit /b 1
