@@ -9,6 +9,9 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Web.Script.Serialization;
+using System.Windows.Forms;
+using System.Drawing;
+using System.Net.Sockets;
 
 namespace TurboDownloader
 {
@@ -67,6 +70,10 @@ namespace TurboDownloader
         private static JavaScriptSerializer json = new JavaScriptSerializer();
         private static ConcurrentDictionary<string, DownloadJob> jobs = new ConcurrentDictionary<string, DownloadJob>();
 
+        private static Mutex appMutex;
+        private static string portFilePath;
+        private static NotifyIcon trayIcon;
+
         [STAThread]
         static void Main()
         {
@@ -81,6 +88,37 @@ namespace TurboDownloader
                     catch { }
                 };
 
+                appDir = AppDomain.CurrentDomain.BaseDirectory;
+                saveDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads");
+                if (!Directory.Exists(saveDir)) saveDir = appDir;
+
+                portFilePath = Path.Combine(Path.GetTempPath(), "turbodownloader_180hz.port");
+
+                // Check single-instance mutex
+                bool createdNew = false;
+                try
+                {
+                    appMutex = new Mutex(true, "Global\\TurboDownloader_180hz_SingleInstance", out createdNew);
+                }
+                catch
+                {
+                    try { appMutex = new Mutex(true, "Local\\TurboDownloader_180hz_SingleInstance", out createdNew); } catch { createdNew = true; }
+                }
+
+                if (!createdNew)
+                {
+                    // Existing instance running! Refocus browser to existing instance port
+                    int existingPort = 4000;
+                    if (File.Exists(portFilePath))
+                    {
+                        int p;
+                        if (int.TryParse(File.ReadAllText(portFilePath).Trim(), out p) && p > 0)
+                            existingPort = p;
+                    }
+                    LaunchNativeWindow(existingPort);
+                    return;
+                }
+
                 try
                 {
                     ServicePointManager.SecurityProtocol = (SecurityProtocolType)3072 | (SecurityProtocolType)768 | SecurityProtocolType.Tls;
@@ -90,45 +128,79 @@ namespace TurboDownloader
                 }
                 catch { }
 
-                appDir = AppDomain.CurrentDomain.BaseDirectory;
-                saveDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads");
-                if (!Directory.Exists(saveDir)) saveDir = appDir;
-
                 // Start HTTP Server
-                StartHttpServer();
+                if (!StartHttpServer())
+                {
+                    File.WriteAllText(Path.Combine(appDir, "crash.log"), "Failed to bind HTTP server to any candidate port.");
+                    return;
+                }
+
+                // Save active port
+                try { File.WriteAllText(portFilePath, port.ToString()); } catch { }
 
                 // Launch Desktop Application Window
-                LaunchNativeWindow();
+                LaunchNativeWindow(port);
 
-                // Keep Server Running
-                while (true)
-                {
-                    Thread.Sleep(2000);
-                }
+                // Run Tray App & Message Loop
+                RunTrayApp();
             }
             catch (Exception ex)
             {
                 File.WriteAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "crash.log"), ex.ToString());
             }
+            finally
+            {
+                CleanUp();
+            }
         }
 
-        private static void StartHttpServer()
+        private static bool StartHttpServer()
         {
-            listener = new HttpListener();
-            string prefix = string.Format("http://127.0.0.1:{0}/", port);
-            listener.Prefixes.Add(prefix);
+            List<int> candidatePorts = new List<int>();
+            for (int p = 4000; p <= 4030; p++) candidatePorts.Add(p);
+            candidatePorts.Add(48291);
+            candidatePorts.Add(48292);
+            candidatePorts.Add(48293);
+            candidatePorts.Add(52000);
+            candidatePorts.Add(52001);
 
-            try
+            for (int i = 0; i < 5; i++)
             {
-                listener.Start();
+                int freeP = GetFreePort();
+                if (freeP > 0 && !candidatePorts.Contains(freeP))
+                    candidatePorts.Add(freeP);
             }
-            catch (Exception)
+
+            foreach (int candidate in candidatePorts)
             {
-                port = 48291;
-                listener = new HttpListener();
-                listener.Prefixes.Add(string.Format("http://127.0.0.1:{0}/", port));
-                listener.Start();
+                string[] hosts = new string[] { "127.0.0.1", "localhost" };
+                foreach (string h in hosts)
+                {
+                    HttpListener l = null;
+                    try
+                    {
+                        l = new HttpListener();
+                        l.Prefixes.Add(string.Format("http://{0}:{1}/", h, candidate));
+                        l.Start();
+                        listener = l;
+                        port = candidate;
+                        break;
+                    }
+                    catch
+                    {
+                        if (l != null)
+                        {
+                            try { l.Close(); } catch { }
+                        }
+                    }
+                }
+
+                if (listener != null && listener.IsListening)
+                    break;
             }
+
+            if (listener == null || !listener.IsListening)
+                return false;
 
             Task.Factory.StartNew(() =>
             {
@@ -154,12 +226,120 @@ namespace TurboDownloader
                             }
                         });
                     }
+                    catch (HttpListenerException)
+                    {
+                        break;
+                    }
+                    catch (ObjectDisposedException)
+                    {
+                        break;
+                    }
                     catch { }
                 }
             });
+
+            return true;
         }
 
-        private static void LaunchNativeWindow()
+        private static int GetFreePort()
+        {
+            try
+            {
+                TcpListener tcp = new TcpListener(IPAddress.Loopback, 0);
+                tcp.Start();
+                int p = ((IPEndPoint)tcp.LocalEndpoint).Port;
+                tcp.Stop();
+                return p;
+            }
+            catch
+            {
+                return 0;
+            }
+        }
+
+        private static void RunTrayApp()
+        {
+            try
+            {
+                Application.EnableVisualStyles();
+                Application.SetCompatibleTextRenderingDefault(false);
+
+                trayIcon = new NotifyIcon();
+                trayIcon.Text = string.Format("180hz TurboDownloader (Port {0})", port);
+                trayIcon.Icon = SystemIcons.Application;
+                trayIcon.Visible = true;
+
+                ContextMenu menu = new ContextMenu();
+                menu.MenuItems.Add(new MenuItem("🌐 Open TurboDownloader", (s, e) => LaunchNativeWindow(port)));
+                menu.MenuItems.Add(new MenuItem("📂 Open Downloads Folder", (s, e) => {
+                    try { Process.Start("explorer.exe", saveDir); } catch { }
+                }));
+                menu.MenuItems.Add("-");
+                menu.MenuItems.Add(new MenuItem("❌ Exit TurboDownloader", (s, e) => {
+                    CleanUp();
+                    Application.Exit();
+                }));
+
+                trayIcon.ContextMenu = menu;
+                trayIcon.DoubleClick += (s, e) => LaunchNativeWindow(port);
+
+                Application.Run();
+            }
+            catch
+            {
+                while (listener != null && listener.IsListening)
+                {
+                    Thread.Sleep(2000);
+                }
+            }
+        }
+
+        private static void CleanUp()
+        {
+            try
+            {
+                if (trayIcon != null)
+                {
+                    trayIcon.Visible = false;
+                    trayIcon.Dispose();
+                    trayIcon = null;
+                }
+            }
+            catch { }
+
+            try
+            {
+                if (listener != null)
+                {
+                    listener.Stop();
+                    listener.Close();
+                    listener = null;
+                }
+            }
+            catch { }
+
+            try
+            {
+                if (File.Exists(portFilePath))
+                {
+                    File.Delete(portFilePath);
+                }
+            }
+            catch { }
+
+            try
+            {
+                if (appMutex != null)
+                {
+                    appMutex.ReleaseMutex();
+                    appMutex.Dispose();
+                    appMutex = null;
+                }
+            }
+            catch { }
+        }
+
+        private static void LaunchNativeWindow(int targetPort)
         {
             string edgePath1 = @"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe";
             string edgePath2 = @"C:\Program Files\Microsoft\Edge\Application\msedge.exe";
@@ -170,7 +350,7 @@ namespace TurboDownloader
             else if (File.Exists(edgePath2)) targetBrowser = edgePath2;
             else if (File.Exists(chromePath)) targetBrowser = chromePath;
 
-            string appUrl = string.Format("http://127.0.0.1:{0}/", port);
+            string appUrl = string.Format("http://127.0.0.1:{0}/", targetPort);
 
             try
             {
@@ -188,7 +368,7 @@ namespace TurboDownloader
             }
             catch
             {
-                Process.Start(appUrl);
+                try { Process.Start(appUrl); } catch { }
             }
         }
 
@@ -260,6 +440,16 @@ namespace TurboDownloader
                 {
                     string id = ExtractIdFromUrl(rawUrl, "/api/v1/downloads/", "/open");
                     HandleOpenCompleted(res, id, req.QueryString["target"]);
+                }
+                else if (rawUrl == "/api/v1/system/exit" && req.HttpMethod == "POST")
+                {
+                    SendJson(res, new { success = true, message = "Shutting down TurboDownloader" });
+                    Task.Factory.StartNew(() =>
+                    {
+                        Thread.Sleep(400);
+                        CleanUp();
+                        Environment.Exit(0);
+                    });
                 }
                 else
                 {
