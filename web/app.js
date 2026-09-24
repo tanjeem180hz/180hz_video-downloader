@@ -660,8 +660,13 @@ async function triggerSaveAs(url, filename) {
 
       const json = await res.json();
       const d = json.data;
-      const videoFormats = Array.isArray(d.videoFormats) ? d.videoFormats : [];
+      let videoFormats = Array.isArray(d.videoFormats) ? d.videoFormats : [];
       let audioFormats = Array.isArray(d.audioFormats) ? d.audioFormats : [];
+
+      if (videoFormats.length === 0) {
+        const defaults = getUnlockedDefaultFormats(provider);
+        videoFormats = defaults.videoFormats;
+      }
 
       const hasMp3 = audioFormats.some(f => (f.container || "").toLowerCase() === "mp3" || (f.formatId || "").startsWith("mp3"));
       if (!hasMp3) {
@@ -1443,16 +1448,43 @@ async function triggerSaveAs(url, filename) {
               fill.style.width = "0%";
               text.textContent = "Download Video ▼";
 
+              const errMsg = currentJob.errorMessage || "Processing failed during download.";
+              const isPlatformProtected = errMsg.includes("empty media response") || errMsg.includes("cookies") || errMsg.includes("login") || errMsg.includes("bot");
+              const tunnelUrl = getWebTunnelUrl(r.url, r.provider);
+
               errContainer.innerHTML = `
                 <div class="error-box">
                   ${IC.alert}
-                  <div>
-                    <strong>Analysis: Ready • Download: Failed</strong>
-                    ${currentJob.errorCode ? ` <span class="tag" style="background:rgba(239,68,68,.2);color:#fca5a5">${escapeHtml(currentJob.errorCode)}</span>` : ""}
-                    <p style="margin-top:4px;">${escapeHtml(currentJob.errorMessage || "Processing failed during download.")}</p>
+                  <div style="flex:1;">
+                    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                      <strong>${isPlatformProtected ? "Platform Access Restricted" : "Download Failed"}</strong>
+                      ${currentJob.errorCode ? ` <span class="tag" style="background:rgba(239,68,68,.2);color:#fca5a5">${escapeHtml(currentJob.errorCode)}</span>` : ""}
+                    </div>
+                    <p style="margin-top:6px;font-size:12px;line-height:1.5;color:#fecaca;">
+                      ${isPlatformProtected 
+                        ? "এই পোস্টটি দেখতে প্ল্যাটফর্মের বিশেষ লগইন প্রয়োজন। আপনি নিচের ১-ক্লিক Web Mirror দিয়ে সাথে সাথে কোনো ত্রুটি ছাড়াই ফাইলটি ডাউনলোড করে নিতে পারেন:" 
+                        : escapeHtml(errMsg)}
+                    </p>
+                    <div style="margin-top:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+                      <a href="${tunnelUrl}" target="_blank" rel="noopener" class="post-dl-btn post-dl-btn-primary" style="text-decoration:none;">
+                        ⚡ Direct Download via Web Mirror
+                      </a>
+                      <button type="button" class="post-dl-btn post-dl-btn-redownload" id="errRetryBtn">
+                        🔄 Retry Download
+                      </button>
+                    </div>
                   </div>
                 </div>
               `;
+
+              setTimeout(() => {
+                const retryBtn = document.getElementById("errRetryBtn");
+                if (retryBtn) {
+                  retryBtn.addEventListener("click", () => {
+                    executeDownload(selectedFormat, true);
+                  });
+                }
+              }, 50);
             } else {
               const pct = currentJob.progressPercent || 0;
               fill.style.width = `${Math.min(100, Math.max(0, pct))}%`;

@@ -1307,8 +1307,8 @@ namespace TurboDownloader
                     int h = int.Parse(heightMatch.Groups[1].Value);
                     if (isFacebook)
                     {
-                        formatArg = string.Format("-f \"bestvideo[height<={0}]+bestaudio/best[height<={0}]/best[format_id*=hd]/best\"", h);
-                        mergeArg = "--merge-output-format mp4/mkv";
+                        formatArg = string.Format("-f \"bestvideo[height<={0}]+bestaudio/best[height<={0}]/best[format_id*=hd]/best[ext=mp4]/best\"", h);
+                        mergeArg = "--merge-output-format mp4";
                     }
                     else if (isWebM)
                     {
@@ -1317,19 +1317,19 @@ namespace TurboDownloader
                     }
                     else
                     {
-                        formatArg = string.Format("-f \"bestvideo[height<={0}][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<={0}]+bestaudio/best[height<={0}]/bv*+ba/b\"", h);
-                        mergeArg = "--merge-output-format mp4/mkv";
+                        formatArg = string.Format("-f \"bestvideo[height<={0}][vcodec^=avc1]+bestaudio[ext=m4a]/bestvideo[height<={0}][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<={0}]+bestaudio/best[height<={0}]/bv*+ba/b\"", h);
+                        mergeArg = "--merge-output-format mp4";
                     }
                 }
                 else if (isFacebook && (safeFormatId.IndexOf("hd", StringComparison.OrdinalIgnoreCase) >= 0 || safeFormatId == "best"))
                 {
-                    formatArg = "-f \"bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best[format_id*=hd]/best[ext=mp4]/best\"";
-                    mergeArg = "--merge-output-format mp4/mkv";
+                    formatArg = "-f \"bestvideo+bestaudio/best[format_id*=hd]/best[ext=mp4]/best\"";
+                    mergeArg = "--merge-output-format mp4";
                 }
                 else if (isFacebook && safeFormatId.IndexOf("sd", StringComparison.OrdinalIgnoreCase) >= 0)
                 {
                     formatArg = "-f \"bestvideo[height<=480]+bestaudio/best[format_id*=sd]/best[height<=480]/best\"";
-                    mergeArg = "--merge-output-format mp4/mkv";
+                    mergeArg = "--merge-output-format mp4";
                 }
                 else if (string.IsNullOrEmpty(safeFormatId) || safeFormatId == "best")
                 {
@@ -1340,8 +1340,8 @@ namespace TurboDownloader
                     }
                     else
                     {
-                        formatArg = "-f \"bv*[ext=mp4]+ba[ext=m4a]/bv*+ba/b\"";
-                        mergeArg = "--merge-output-format mp4/mkv";
+                        formatArg = "-f \"bestvideo[vcodec^=avc1]+bestaudio[ext=m4a]/bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best\"";
+                        mergeArg = "--merge-output-format mp4";
                     }
                 }
                 else
@@ -1354,7 +1354,7 @@ namespace TurboDownloader
                     else
                     {
                         formatArg = string.Format("-f \"{0}+bestaudio[ext=m4a]/{0}+bestaudio/{0}/bv*+ba/b\"", safeFormatId);
-                        mergeArg = "--merge-output-format mp4/mkv";
+                        mergeArg = "--merge-output-format mp4";
                     }
                 }
             }
@@ -1368,12 +1368,18 @@ namespace TurboDownloader
             {
                 extArgs += " --add-header \"Accept-Language:en-US,en;q=0.9\"";
             }
+            if (safeUrl.IndexOf("instagram.com", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                extArgs += " --add-header \"Accept:text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8\"";
+            }
             string cookiesPath = Path.Combine(appDir, "cookies.txt");
             if (!File.Exists(cookiesPath)) cookiesPath = Path.Combine(saveDir, "cookies.txt");
             string cookiesArg = File.Exists(cookiesPath) ? string.Format("--cookies \"{0}\"", cookiesPath) : "";
 
-            string args = string.Format("{0} {1} {2} {3} {4} --ffmpeg-location \"{5}\" --newline --no-playlist --no-mtime --windows-filenames -o \"{6}\" \"{7}\"",
-                jsRuntimeArg, extArgs, cookiesArg, formatArg, mergeArg, ffmpeg, outTemplate, safeUrl);
+            string faststartArg = !isAudio ? "--postprocessor-args \"ffmpeg:-movflags faststart\"" : "";
+
+            string args = string.Format("{0} {1} {2} {3} {4} {5} --ffmpeg-location \"{6}\" --newline --no-playlist --no-mtime --windows-filenames -o \"{7}\" \"{8}\"",
+                jsRuntimeArg, extArgs, cookiesArg, formatArg, mergeArg, faststartArg, ffmpeg, outTemplate, safeUrl);
 
             job.status = "DOWNLOADING";
 
@@ -1603,6 +1609,35 @@ namespace TurboDownloader
             res.Close();
         }
 
+        private static string FindSystemVideoPlayer()
+        {
+            string[] candidatePaths = new string[]
+            {
+                // 1. VLC Media Player (Universal player, decodes AV1, VP9, HEVC, H.264, 4K/8K)
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "VideoLAN", "VLC", "vlc.exe"),
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "VideoLAN", "VLC", "vlc.exe"),
+                // 2. PotPlayer
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "DAUM", "PotPlayer", "PotPlayer64.exe"),
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "DAUM", "PotPlayer", "PotPlayer.exe"),
+                // 3. MPC-HC / MPC-BE
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "MPC-HC", "mpc-hc64.exe"),
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "K-Lite Codec Pack", "MPC-HC64", "mpc-hc64.exe"),
+                // 4. Windows Media Player (Classic)
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Windows Media Player", "wmplayer.exe"),
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "Windows Media Player", "wmplayer.exe")
+            };
+
+            foreach (string p in candidatePaths)
+            {
+                try
+                {
+                    if (!string.IsNullOrEmpty(p) && File.Exists(p)) return p;
+                }
+                catch { }
+            }
+            return null;
+        }
+
         // ==========================================
         //  API: /api/v1/downloads/{id}/open
         // ==========================================
@@ -1622,26 +1657,74 @@ namespace TurboDownloader
                     {
                         if (target == "file")
                         {
-                            try
+                            string ext = Path.GetExtension(job.filePath).ToLowerInvariant();
+                            bool isVideo = (ext == ".mp4" || ext == ".webm" || ext == ".mkv" || ext == ".avi" || ext == ".mov");
+
+                            if (isVideo)
                             {
-                                ProcessStartInfo psi = new ProcessStartInfo();
-                                psi.FileName = job.filePath;
-                                psi.UseShellExecute = true;
-                                Process.Start(psi);
-                                launched = true;
+                                string dedicatedPlayer = FindSystemVideoPlayer();
+                                if (!string.IsNullOrEmpty(dedicatedPlayer))
+                                {
+                                    try
+                                    {
+                                        ProcessStartInfo psi = new ProcessStartInfo();
+                                        psi.FileName = dedicatedPlayer;
+                                        psi.Arguments = string.Format("\"{0}\"", job.filePath);
+                                        psi.UseShellExecute = false;
+                                        Process.Start(psi);
+                                        launched = true;
+                                    }
+                                    catch { }
+                                }
+
+                                if (!launched)
+                                {
+                                    try
+                                    {
+                                        ProcessStartInfo psi = new ProcessStartInfo();
+                                        psi.FileName = job.filePath;
+                                        psi.UseShellExecute = true;
+                                        Process.Start(psi);
+                                        launched = true;
+                                    }
+                                    catch
+                                    {
+                                        try
+                                        {
+                                            ProcessStartInfo psi = new ProcessStartInfo();
+                                            psi.FileName = "explorer.exe";
+                                            psi.Arguments = string.Format("/select,\"{0}\"", job.filePath);
+                                            psi.UseShellExecute = true;
+                                            Process.Start(psi);
+                                            launched = true;
+                                        }
+                                        catch { }
+                                    }
+                                }
                             }
-                            catch
+                            else
                             {
                                 try
                                 {
                                     ProcessStartInfo psi = new ProcessStartInfo();
-                                    psi.FileName = "explorer.exe";
-                                    psi.Arguments = string.Format("/select,\"{0}\"", job.filePath);
+                                    psi.FileName = job.filePath;
                                     psi.UseShellExecute = true;
                                     Process.Start(psi);
                                     launched = true;
                                 }
-                                catch { }
+                                catch
+                                {
+                                    try
+                                    {
+                                        ProcessStartInfo psi = new ProcessStartInfo();
+                                        psi.FileName = "explorer.exe";
+                                        psi.Arguments = string.Format("/select,\"{0}\"", job.filePath);
+                                        psi.UseShellExecute = true;
+                                        Process.Start(psi);
+                                        launched = true;
+                                    }
+                                    catch { }
+                                }
                             }
                         }
                         else
