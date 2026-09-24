@@ -1,0 +1,19 @@
+# Binaries larger than GitHub 100MB limit
+ffmpeg.exe
+ffplay.exe
+ffprobe.exe
+yt-dlp.exe
+
+# Temporary download files
+*.part
+*.ytdl
+*.bin
+*.log
+*.tmp
+
+# User downloads folder contents if any
+*.mp4
+*.webm
+*.mkv
+*.mp3
+*.m4a
