@@ -12,6 +12,7 @@ using System.Web.Script.Serialization;
 using System.Windows.Forms;
 using System.Drawing;
 using System.Net.Sockets;
+using System.Linq;
 
 namespace TurboDownloader
 {
@@ -66,13 +67,33 @@ namespace TurboDownloader
         private static HttpListener listener;
         private static string appDir;
         private static string saveDir;
-        private static string nodePath = @"C:\Program Files\nodejs\node.exe";
         private static JavaScriptSerializer json = new JavaScriptSerializer();
         private static ConcurrentDictionary<string, DownloadJob> jobs = new ConcurrentDictionary<string, DownloadJob>();
 
         private static Mutex appMutex;
         private static string portFilePath;
         private static NotifyIcon trayIcon;
+
+        private static string GetNodePath()
+        {
+            if (File.Exists(@"C:\Program Files\nodejs\node.exe")) return @"C:\Program Files\nodejs\node.exe";
+            if (File.Exists(@"C:\Program Files (x86)\nodejs\node.exe")) return @"C:\Program Files (x86)\nodejs\node.exe";
+            try
+            {
+                string envPath = Environment.GetEnvironmentVariable("PATH");
+                if (!string.IsNullOrEmpty(envPath))
+                {
+                    foreach (string p in envPath.Split(';'))
+                    {
+                        if (string.IsNullOrEmpty(p)) continue;
+                        string np = Path.Combine(p.Trim(), "node.exe");
+                        if (File.Exists(np)) return np;
+                    }
+                }
+            }
+            catch { }
+            return null;
+        }
 
         [STAThread]
         static void Main()
@@ -285,12 +306,11 @@ namespace TurboDownloader
 
                 Application.Run();
             }
-            catch
+            catch { }
+
+            while (listener != null && listener.IsListening)
             {
-                while (listener != null && listener.IsListening)
-                {
-                    Thread.Sleep(2000);
-                }
+                Thread.Sleep(2000);
             }
         }
 
@@ -575,9 +595,12 @@ namespace TurboDownloader
             string ytdlp = Path.Combine(appDir, "yt-dlp.exe");
             if (!File.Exists(ytdlp)) ytdlp = "yt-dlp.exe";
 
-            string jsRuntimeArg = File.Exists(nodePath) ? string.Format("--js-runtimes node:\"{0}\"", nodePath) : "";
-            string extArgs = "--extractor-args \"youtube:player_client=web_creator,web_embedded,mweb\"";
-            string cookiesArg = File.Exists(Path.Combine(appDir, "cookies.txt")) ? string.Format("--cookies \"{0}\"", Path.Combine(appDir, "cookies.txt")) : "";
+            string np = GetNodePath();
+            string jsRuntimeArg = !string.IsNullOrEmpty(np) ? string.Format("--js-runtimes node:\"{0}\"", np) : "";
+            string extArgs = "";
+            string cookiesPath = Path.Combine(appDir, "cookies.txt");
+            if (!File.Exists(cookiesPath)) cookiesPath = Path.Combine(saveDir, "cookies.txt");
+            string cookiesArg = File.Exists(cookiesPath) ? string.Format("--cookies \"{0}\"", cookiesPath) : "";
 
             ProcessStartInfo psi = new ProcessStartInfo();
             psi.FileName = ytdlp;
@@ -687,8 +710,8 @@ namespace TurboDownloader
                                 vdto.estimatedSizeBytes = filesize;
                                 vdto.hdr = isHdr;
 
-                                // Group by resolution tier, keeping best FPS, HDR, or bitrate
-                                string groupKey = resLabel;
+                                // Group by resolution tier and container (MP4 / WebM), keeping best FPS, HDR, or bitrate
+                                string groupKey = resLabel + "_" + ext.ToLower();
                                 if (!resolutionMap.ContainsKey(groupKey))
                                 {
                                     resolutionMap[groupKey] = vdto;
@@ -820,7 +843,9 @@ namespace TurboDownloader
             string ffmpeg = Path.Combine(appDir, "ffmpeg.exe");
 
             string formatArg;
-            string mergeArg = string.Format("--merge-output-format {0}", container);
+            string mergeArg;
+
+            bool isWebM = string.Equals(container, "webm", StringComparison.OrdinalIgnoreCase);
 
             if (audioOnly)
             {
@@ -829,17 +854,38 @@ namespace TurboDownloader
             }
             else if (!string.IsNullOrEmpty(formatId) && formatId != "best")
             {
-                formatArg = string.Format("-f \"{0}+bestaudio[ext=m4a]/{0}+bestaudio/{0}/bv*+ba/b\"", formatId);
+                if (isWebM)
+                {
+                    formatArg = string.Format("-f \"{0}+bestaudio[ext=webm]/{0}+bestaudio[acodec=opus]/{0}+ba/{0}/bv*+ba/b\"", formatId);
+                    mergeArg = "--merge-output-format webm/mkv";
+                }
+                else
+                {
+                    formatArg = string.Format("-f \"{0}+bestaudio[ext=m4a]/{0}+bestaudio/{0}/bv*+ba/b\"", formatId);
+                    mergeArg = "--merge-output-format mp4/mkv";
+                }
             }
             else
             {
-                formatArg = "-f \"bv*+ba/b\"";
+                if (isWebM)
+                {
+                    formatArg = "-f \"bv*[ext=webm]+ba[ext=webm]/bv*+ba/b\"";
+                    mergeArg = "--merge-output-format webm/mkv";
+                }
+                else
+                {
+                    formatArg = "-f \"bv*+ba/b\"";
+                    mergeArg = "--merge-output-format mp4/mkv";
+                }
             }
 
             string outTemplate = Path.Combine(saveDir, "%(title)s.%(ext)s");
-            string jsRuntimeArg = File.Exists(nodePath) ? string.Format("--js-runtimes node:\"{0}\"", nodePath) : "";
-            string extArgs = "--extractor-args \"youtube:player_client=web_creator,web_embedded,mweb\"";
-            string cookiesArg = File.Exists(Path.Combine(appDir, "cookies.txt")) ? string.Format("--cookies \"{0}\"", Path.Combine(appDir, "cookies.txt")) : "";
+            string np = GetNodePath();
+            string jsRuntimeArg = !string.IsNullOrEmpty(np) ? string.Format("--js-runtimes node:\"{0}\"", np) : "";
+            string extArgs = "";
+            string cookiesPath = Path.Combine(appDir, "cookies.txt");
+            if (!File.Exists(cookiesPath)) cookiesPath = Path.Combine(saveDir, "cookies.txt");
+            string cookiesArg = File.Exists(cookiesPath) ? string.Format("--cookies \"{0}\"", cookiesPath) : "";
 
             string args = string.Format("{0} {1} {2} {3} {4} --ffmpeg-location \"{5}\" --newline --no-playlist --no-mtime --windows-filenames -o \"{6}\" \"{7}\"",
                 jsRuntimeArg, extArgs, cookiesArg, formatArg, mergeArg, ffmpeg, outTemplate, job.url);
@@ -873,6 +919,24 @@ namespace TurboDownloader
                 {
                     job.status = "COMPLETED";
                     job.progressPercent = 100;
+
+                    if (string.IsNullOrEmpty(job.filePath) || !File.Exists(job.filePath))
+                    {
+                        try
+                        {
+                            DirectoryInfo di = new DirectoryInfo(saveDir);
+                            FileInfo latest = di.GetFiles()
+                                .Where(f => !f.Name.EndsWith(".part") && !f.Name.EndsWith(".ytdl") && !f.Name.EndsWith(".aria2"))
+                                .OrderByDescending(f => f.LastWriteTimeUtc)
+                                .FirstOrDefault();
+                            if (latest != null && (DateTime.UtcNow - latest.LastWriteTimeUtc).TotalMinutes < 5)
+                            {
+                                job.filePath = latest.FullName;
+                                job.title = Path.GetFileNameWithoutExtension(latest.FullName);
+                            }
+                        }
+                        catch { }
+                    }
 
                     if (!string.IsNullOrEmpty(job.filePath) && File.Exists(job.filePath))
                     {
@@ -921,12 +985,33 @@ namespace TurboDownloader
             {
                 job.status = "MERGING";
                 job.progressPercent = 99.0;
+                int startIdx = line.IndexOf("into \"");
+                if (startIdx >= 0)
+                {
+                    startIdx += 6;
+                    int endIdx = line.LastIndexOf("\"");
+                    if (endIdx > startIdx)
+                    {
+                        string fn = line.Substring(startIdx, endIdx - startIdx).Trim();
+                        job.filePath = fn;
+                        job.title = Path.GetFileNameWithoutExtension(fn);
+                    }
+                }
             }
-            else if (line.Contains("[download] Destination:"))
+            else if (line.Contains("[ExtractAudio] Destination:"))
             {
                 string fn = line.Substring(line.IndexOf("Destination:") + 12).Trim();
                 job.filePath = fn;
                 job.title = Path.GetFileNameWithoutExtension(fn);
+            }
+            else if (line.Contains("[download] Destination:"))
+            {
+                string fn = line.Substring(line.IndexOf("Destination:") + 12).Trim();
+                if (!fn.Contains(".f") || fn.EndsWith(".mp4") || fn.EndsWith(".webm") || fn.EndsWith(".mkv") || fn.EndsWith(".mp3"))
+                {
+                    job.filePath = fn;
+                    job.title = Path.GetFileNameWithoutExtension(fn);
+                }
             }
             else if (line.Contains("has already been downloaded"))
             {

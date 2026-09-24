@@ -664,6 +664,7 @@ function nativeHandoff(url, filename) {
         `;
 
         filteredVideo.forEach((fmt, idx) => {
+          if (fmt.formatId === "best") return;
           const isSelected = selectedFormat && !selectedFormat.isBest && selectedFormat.formatId === fmt.formatId;
           const resLabel = getCanonicalResolution(fmt);
           const size = fmt.filesizeFormatted || (fmt.estimatedSizeBytes ? humanBytes(fmt.estimatedSizeBytes) : null);
@@ -720,6 +721,7 @@ function nativeHandoff(url, filename) {
         `;
 
         filteredAudio.forEach((fmt, idx) => {
+          if (fmt.formatId === "bestaudio" && filteredAudio.length > 1) return;
           const isSelected = selectedFormat && !selectedFormat.isBest && selectedFormat.formatId === fmt.formatId;
           const size = fmt.filesizeFormatted || (fmt.estimatedSizeBytes ? humanBytes(fmt.estimatedSizeBytes) : null);
           const label = fmt.label || fmt.formatId;
