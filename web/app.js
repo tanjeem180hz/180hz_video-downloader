@@ -1178,29 +1178,29 @@ function nativeHandoff(url, filename) {
       const formatLabel = fmt ? (fmt.label || getCanonicalResolution(fmt) || "Lossless 4K/8K") : "Lossless 4K/8K";
 
       errContainer.innerHTML = `
-        <div class="desktop-installer-card" style="margin-top:16px;background:rgba(124,92,255,0.08);border:1px solid rgba(124,92,255,0.4);border-radius:12px;padding:18px;animation:card-in .4s ease;">
+        <div class="desktop-installer-card" style="margin-top:16px;background:rgba(124,92,255,0.08);border:1px solid rgba(124,92,255,0.45);border-radius:12px;padding:20px;animation:card-in .4s ease;">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
             <div style="display:flex;align-items:center;gap:8px;">
               ${IC.zap}
-              <strong style="color:var(--lime);font-size:12px;letter-spacing:.12em;text-transform:uppercase;">LOSSLESS 4K/8K DESKTOP INSTALLER</strong>
+              <strong style="color:var(--lime);font-size:12px;letter-spacing:.12em;text-transform:uppercase;">TURBODOWNLOADER 8K DESKTOP ENGINE</strong>
             </div>
             <span class="tag done" style="font-size:10px;background:rgba(216,255,62,0.15);color:var(--lime);border:1px solid rgba(216,255,62,0.3);">${escapeHtml(formatLabel)}</span>
           </div>
-          <p style="font-size:13px;color:#edece8;margin-bottom:12px;line-height:1.6;">
-            To download <strong>${escapeHtml(r.title || "video")}</strong> in full bit-exact quality with untouched audio, run the 1-click Windows installer:
+          <p style="font-size:13px;color:#edece8;margin-bottom:14px;line-height:1.6;">
+            To download <strong>${escapeHtml(r.title || "this media")}</strong> in full bit-exact 4K/8K quality with untouched lossless audio, use the 1-click Windows desktop app:
           </p>
-          <ul style="margin:0 0 14px 18px;padding:0;color:rgba(237,237,232,0.85);font-size:11px;line-height:1.7;">
-            <li>⚡ <strong>Automated Setup:</strong> Auto-downloads & configures yt-dlp and FFmpeg silently.</li>
-            <li>⚡ <strong>Bit-Exact 4K/8K:</strong> Full source stream without compression or re-encoding.</li>
-            <li>⚡ <strong>Zero Limits:</strong> Directly saves to your Downloads folder with resume support.</li>
-          </ul>
-          <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-top:14px;">
-            <a href="TurboDownloaderSetup.exe" download="TurboDownloaderSetup.exe" class="chip" style="background:var(--lime);color:#000;font-weight:700;font-size:12px;padding:8px 18px;text-decoration:none;border-radius:6px;display:inline-flex;align-items:center;gap:6px;">
-              ${IC.dl} Download Installer (.exe)
+          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px;">
+            <a href="TurboDownloaderSetup.exe" download="TurboDownloaderSetup.exe" class="chip" style="background:var(--lime);color:#000;font-weight:700;font-size:12px;padding:10px 22px;text-decoration:none;border-radius:8px;display:inline-flex;align-items:center;gap:8px;box-shadow:0 0 20px rgba(216,255,62,0.25);">
+              ${IC.dl} Download Windows App (.exe)
             </a>
-            <button type="button" id="openTurboDesktopBtn" class="chip" style="background:rgba(124,92,255,0.25);color:#c4b5fd;border:1px solid rgba(124,92,255,0.6);font-size:11px;padding:8px 16px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;">
-              ${IC.zap} Open in Desktop (Port 4000)
+            <button type="button" id="openTurboDesktopBtn" class="chip" style="background:rgba(124,92,255,0.25);color:#c4b5fd;border:1px solid rgba(124,92,255,0.6);font-size:11px;padding:10px 18px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;border-radius:8px;">
+              ${IC.zap} Open in TurboDownloader Desktop (Lossless 4K/8K)
             </button>
+          </div>
+          <div style="padding-top:12px;border-top:1px solid rgba(255,255,255,0.06);font-size:11px;color:rgba(237,237,232,0.7);display:flex;gap:16px;flex-wrap:wrap;">
+            <span>✓ Auto-installs yt-dlp & FFmpeg</span>
+            <span>✓ 100% Lossless 4K & 8K Video</span>
+            <span>✓ Untouched Hi-Fi Audio</span>
           </div>
         </div>
       `;
@@ -1215,7 +1215,7 @@ function nativeHandoff(url, filename) {
       }, 0);
 
       fill.style.width = "100%";
-      text.textContent = "Download via App (.exe) ▼";
+      text.textContent = "Download via App (.exe) ⚡";
       isDownloading = false;
       btn.disabled = false;
       cancel.classList.add("hidden");
