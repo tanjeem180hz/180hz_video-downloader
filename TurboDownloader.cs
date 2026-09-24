@@ -1302,59 +1302,71 @@ namespace TurboDownloader
             }
             else
             {
-                Match heightMatch = Regex.Match(safeFormatId, @"^(\d+)p");
-                if (heightMatch.Success)
+                int targetHeight = 0;
+                Match hm1 = Regex.Match(safeFormatId, @"^(\d+)p");
+                if (hm1.Success) targetHeight = int.Parse(hm1.Groups[1].Value);
+                if (targetHeight == 0 && !string.IsNullOrEmpty(quality))
                 {
-                    int h = int.Parse(heightMatch.Groups[1].Value);
-                    if (isWebM)
-                    {
-                        formatArg = string.Format("-f \"bestvideo[height<={0}][ext=webm]+bestaudio[ext=webm]/bestvideo[height<={0}]+bestaudio/best[height<={0}]/bv*+ba/b\"", h);
-                        mergeArg = "--merge-output-format webm";
-                    }
-                    else
-                    {
-                        formatArg = string.Format("-f \"best[height<={0}][ext=mp4]/bestvideo[height<={0}][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<={0}]+bestaudio/best[height<={0}]/bv*+ba/b\" -S \"res:{0},vcodec:h264,acodec:m4a\"", h);
-                        mergeArg = "--merge-output-format mp4";
-                    }
+                    Match hm2 = Regex.Match(quality, @"(\d+)p");
+                    if (hm2.Success) targetHeight = int.Parse(hm2.Groups[1].Value);
                 }
-                else if (isFacebook && (safeFormatId.IndexOf("hd", StringComparison.OrdinalIgnoreCase) >= 0 || safeFormatId == "best"))
+
+                if (isFacebook && (safeFormatId.IndexOf("hd", StringComparison.OrdinalIgnoreCase) >= 0 || safeFormatId == "best"))
                 {
-                    formatArg = "-f \"best[format_id*=hd]/best[ext=mp4]/bestvideo+bestaudio/best\" -S \"vcodec:h264,acodec:m4a\"";
+                    formatArg = "-f \"best[format_id*=hd]/best[ext=mp4]/bestvideo+bestaudio/best\" -S \"res,acodec:m4a\"";
                     mergeArg = "--merge-output-format mp4";
                 }
                 else if (isFacebook && safeFormatId.IndexOf("sd", StringComparison.OrdinalIgnoreCase) >= 0)
                 {
-                    formatArg = "-f \"best[format_id*=sd][height<=480]/bestvideo[height<=480]+bestaudio/best[height<=480]/best\" -S \"vcodec:h264,acodec:m4a\"";
+                    formatArg = "-f \"best[format_id*=sd][height<=480]/bestvideo[height<=480]+bestaudio/best[height<=480]/best\" -S \"res:480,acodec:m4a\"";
                     mergeArg = "--merge-output-format mp4";
                 }
-                else if (isSocial)
+                else if (isSocial && (string.IsNullOrEmpty(safeFormatId) || safeFormatId == "best"))
                 {
-                    formatArg = "-f \"best[ext=mp4]/bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best\" -S \"res,vcodec:h264,acodec:m4a\"";
+                    formatArg = "-f \"best[ext=mp4]/bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best\" -S \"res,acodec:m4a\"";
                     mergeArg = "--merge-output-format mp4";
                 }
                 else if (string.IsNullOrEmpty(safeFormatId) || safeFormatId == "best")
                 {
                     if (isWebM)
                     {
-                        formatArg = "-f \"bv*[ext=webm]+ba[ext=webm]/bv*+ba/b\"";
+                        formatArg = targetHeight > 0
+                            ? string.Format("-f \"bestvideo[height<={0}][ext=webm]+bestaudio[ext=webm]/bestvideo[height<={0}]+bestaudio/best[height<={0}]/bv*+ba/b\" -S \"res:{0},acodec:opus\"", targetHeight)
+                            : "-f \"bv*[ext=webm]+ba[ext=webm]/bv*+ba/b\" -S \"res,acodec:opus\"";
                         mergeArg = "--merge-output-format webm";
                     }
                     else
                     {
-                        formatArg = "-f \"best[ext=mp4]/bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo[vcodec^=avc1]+bestaudio[ext=m4a]/bestvideo+bestaudio/best\" -S \"res,vcodec:h264,acodec:m4a\"";
+                        formatArg = targetHeight > 0
+                            ? string.Format("-f \"best[height<={0}][ext=mp4]/bestvideo[height<={0}]+bestaudio/best[height<={0}]/best\" -S \"res:{0},acodec:m4a\"", targetHeight)
+                            : "-f \"best[ext=mp4]/bestvideo+bestaudio/best\" -S \"res,acodec:m4a\"";
+                        mergeArg = "--merge-output-format mp4";
+                    }
+                }
+                else if (safeFormatId.EndsWith("p") && targetHeight > 0)
+                {
+                    if (isWebM)
+                    {
+                        formatArg = string.Format("-f \"bestvideo[height<={0}][ext=webm]+bestaudio[ext=webm]/bestvideo[height<={0}]+bestaudio/best[height<={0}]/bv*+ba/b\" -S \"res:{0},acodec:opus\"", targetHeight);
+                        mergeArg = "--merge-output-format webm";
+                    }
+                    else
+                    {
+                        formatArg = string.Format("-f \"best[height<={0}][ext=mp4]/bestvideo[height<={0}]+bestaudio/best[height<={0}]/best\" -S \"res:{0},acodec:m4a\"", targetHeight);
                         mergeArg = "--merge-output-format mp4";
                     }
                 }
                 else
                 {
+                    // Specific Format ID selected by user (e.g. 701, 401, 315, 299, 137, 18, 0, etc.)
                     if (isWebM)
                     {
-                        formatArg = string.Format("-f \"{0}[hasvid][hasaud]/{0}+bestaudio[ext=webm]/{0}+bestaudio[acodec=opus]/{0}+ba/{0}/bv*+ba/b\"", safeFormatId);
+                        formatArg = string.Format("-f \"{0}[acodec!=none]/{0}+bestaudio[ext=webm]/{0}+bestaudio[acodec=opus]/{0}+bestaudio/{0}/best\" -S \"res,acodec:opus\"", safeFormatId);
                         mergeArg = "--merge-output-format webm";
                     }
                     else
                     {
-                        formatArg = string.Format("-f \"{0}[hasvid][hasaud]/{0}+bestaudio[ext=m4a]/{0}+bestaudio/{0}/bv*+ba/b\" -S \"vcodec:h264,acodec:m4a\"", safeFormatId);
+                        formatArg = string.Format("-f \"{0}[acodec!=none]/{0}+bestaudio[ext=m4a]/{0}+bestaudio/{0}/best\" -S \"res,acodec:m4a\"", safeFormatId);
                         mergeArg = "--merge-output-format mp4";
                     }
                 }
