@@ -1058,9 +1058,84 @@ function nativeHandoff(url, filename) {
       }
     }
 
+    const downloadedCache = {};
+
+    function showCompletedUi(completedJob, fmt) {
+      isDownloading = false;
+      btn.disabled = false;
+      cancel.classList.add("hidden");
+      fill.style.width = "100%";
+      text.textContent = "✓ Saved — Click for Options";
+      msg.className = "msg ok";
+      const sizeLabel = completedJob.fileSizeBytes ? humanBytes(completedJob.fileSizeBytes) : (completedJob.downloadedBytes ? humanBytes(completedJob.downloadedBytes) : "");
+      const sizeText = sizeLabel ? ` (${sizeLabel})` : "";
+      const currentFmt = fmt || selectedFormat;
+      const cacheKey = `${r.url}_${(currentFmt && currentFmt.formatId) || 'best'}`;
+
+      msg.innerHTML = `
+        <div style="line-height:1.6;font-size:12px;">
+          <strong>✓ Saved to Downloads:</strong> ${escapeHtml(completedJob.title || r.title || "video")}${sizeText}
+        </div>
+        <div style="margin-top:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <button type="button" class="chip" id="openVideoFileBtn" style="cursor:pointer;background:var(--lime);color:#000;font-weight:700;padding:7px 14px;border-radius:6px;box-shadow:0 0 14px rgba(216,255,62,0.25);">🎬 Open Video File</button>
+          <button type="button" class="chip" id="openLocalFolderBtn" style="cursor:pointer;background:rgba(216,255,62,0.15);color:var(--lime);border:1px solid var(--lime);padding:7px 14px;border-radius:6px;">📂 Open in Downloads Folder</button>
+          <button type="button" class="chip" id="saveAsBtn" style="cursor:pointer;background:rgba(124,92,255,0.25);color:#c4b5fd;border:1px solid rgba(124,92,255,0.6);padding:7px 14px;border-radius:6px;">💾 Save As / Export</button>
+          <button type="button" class="chip" id="reDownloadBtn" style="cursor:pointer;background:rgba(255,255,255,0.06);color:var(--dim);padding:7px 12px;border-radius:6px;">🔄 Re-download</button>
+        </div>
+      `;
+
+      let fileUrl = completedJob.downloadUrl || `${BACKEND_API_BASE}/downloads/${completedJob.id}/file`;
+      if (!fileUrl.startsWith("http")) {
+        const apiOrigin = new URL(BACKEND_API_BASE).origin;
+        fileUrl = `${apiOrigin}${fileUrl.startsWith('/') ? '' : '/'}${fileUrl}`;
+      }
+
+      setTimeout(() => {
+        const ovb = document.getElementById("openVideoFileBtn");
+        if (ovb) {
+          ovb.addEventListener("click", () => {
+            fetch(`${BACKEND_API_BASE}/downloads/${completedJob.id}/open?target=file`, { method: "POST" });
+          });
+        }
+        const ofb = document.getElementById("openLocalFolderBtn");
+        if (ofb) {
+          ofb.addEventListener("click", () => {
+            fetch(`${BACKEND_API_BASE}/downloads/${completedJob.id}/open`, { method: "POST" });
+          });
+        }
+        const sab = document.getElementById("saveAsBtn");
+        if (sab) {
+          sab.addEventListener("click", () => {
+            nativeHandoff(fileUrl, `${completedJob.title || r.title || "video"}.${completedJob.requestedFormat || "mp4"}`);
+          });
+        }
+        const rdb = document.getElementById("reDownloadBtn");
+        if (rdb) {
+          rdb.addEventListener("click", () => {
+            delete downloadedCache[cacheKey];
+            delete downloadedCache[r.url];
+            executeDownload(selectedFormat, true);
+          });
+        }
+      }, 50);
+
+      // ONLY trigger browser nativeHandoff if purely on remote web (no local desktop engine saving to disk)
+      if (!isDesktopEnvironment() && !r.isLocalBackend) {
+        nativeHandoff(fileUrl, `${completedJob.title || r.title || "video"}.${completedJob.requestedFormat || "mp4"}`);
+      }
+
+      Ledger.bump(r.url);
+    }
+
     btn.addEventListener("click", () => {
       if (isDownloading) return;
       if (r.isLocalBackend || isDesktopEnvironment()) {
+        const cacheKey = `${r.url}_${(selectedFormat && selectedFormat.formatId) || 'best'}`;
+        const existing = downloadedCache[cacheKey] || downloadedCache[r.url];
+        if (existing) {
+          showCompletedUi(existing, selectedFormat);
+          return;
+        }
         executeDownload(selectedFormat);
       } else {
         handleLaunchOrInstallDesktop(r.url);
@@ -1093,8 +1168,16 @@ function nativeHandoff(url, filename) {
       setTimeout(() => (msg.textContent = ""), 4000);
     });
 
-    async function executeDownload(fmt) {
+    async function executeDownload(fmt, force = false) {
       if (isDownloading) return;
+
+      const cacheKey = `${r.url}_${(fmt && fmt.formatId) || 'best'}`;
+      const existing = downloadedCache[cacheKey] || downloadedCache[r.url];
+      if (!force && existing) {
+        showCompletedUi(existing, fmt);
+        return;
+      }
+
       isDownloading = true;
       btn.disabled = true;
       cancel.classList.remove("hidden");
@@ -1109,7 +1192,8 @@ function nativeHandoff(url, filename) {
         formatId: fmt.formatId,
         container: fmt.container || (fmt.audioOnly ? "mp3" : "mp4"),
         quality: fmt.quality || fmt.resolution || "best",
-        audioOnly: Boolean(fmt.audioOnly)
+        audioOnly: Boolean(fmt.audioOnly),
+        force: Boolean(force)
       };
 
       try {
@@ -1127,6 +1211,15 @@ function nativeHandoff(url, filename) {
         }
 
         const createData = await createRes.json();
+
+        // Backend reports existing completed file on disk!
+        if (createData.alreadyCompleted && createData.data) {
+          downloadedCache[cacheKey] = createData.data;
+          downloadedCache[r.url] = createData.data;
+          showCompletedUi(createData.data, fmt);
+          return;
+        }
+
         const job = createData.data;
         currentJobId = job.id;
 
@@ -1140,35 +1233,9 @@ function nativeHandoff(url, filename) {
             if (currentJob.status === "COMPLETED") {
               clearInterval(pollTimer);
               pollTimer = null;
-              isDownloading = false;
-              btn.disabled = false;
-              cancel.classList.add("hidden");
-              fill.style.width = "100%";
-              text.textContent = "Saved ✓ Pull again";
-              msg.className = "msg ok";
-              const sizeLabel = currentJob.fileSizeBytes ? humanBytes(currentJob.fileSizeBytes) : humanBytes(currentJob.downloadedBytes);
-              msg.innerHTML = `Saved ${escapeHtml(currentJob.title || r.title || "video")} (${sizeLabel}) — bit-exact <br>
-                <button type="button" class="chip" id="openLocalFolderBtn" style="margin-top:6px;cursor:pointer;background:rgba(216,255,62,0.15);color:var(--lime);border:1px solid var(--lime);">📂 Open in Downloads Folder</button>`;
-
-              setTimeout(() => {
-                const ofb = document.getElementById("openLocalFolderBtn");
-                if (ofb) {
-                  ofb.addEventListener("click", () => {
-                    fetch(`${BACKEND_API_BASE}/downloads/${currentJob.id}/open`, { method: "POST" });
-                  });
-                }
-              }, 50);
-
-              let fileUrl = currentJob.downloadUrl || `${BACKEND_API_BASE}/downloads/${currentJob.id}/file`;
-              if (!fileUrl.startsWith("http")) {
-                const apiOrigin = new URL(BACKEND_API_BASE).origin;
-                fileUrl = `${apiOrigin}${fileUrl.startsWith('/') ? '' : '/'}${fileUrl}`;
-              }
-              nativeHandoff(fileUrl, `${currentJob.title || r.title || "video"}.${currentJob.requestedFormat || "mp4"}`);
-              Ledger.bump(r.url);
-              setTimeout(() => {
-                text.textContent = "Download Video ▼";
-              }, 4500);
+              downloadedCache[cacheKey] = currentJob;
+              downloadedCache[r.url] = currentJob;
+              showCompletedUi(currentJob, fmt);
 
             } else if (currentJob.status === "FAILED" || currentJob.status === "CANCELLED") {
               clearInterval(pollTimer);

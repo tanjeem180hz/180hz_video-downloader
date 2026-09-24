@@ -842,7 +842,12 @@ namespace TurboDownloader
 
             string np = GetNodePath();
             string jsRuntimeArg = !string.IsNullOrEmpty(np) ? string.Format("--js-runtimes node:\"{0}\"", np) : "";
-            string extArgs = "";
+            string userAgentArg = "--user-agent \"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36\"";
+            string extArgs = userAgentArg;
+            if (safeUrl.IndexOf("facebook.com", StringComparison.OrdinalIgnoreCase) >= 0 || safeUrl.IndexOf("fb.watch", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                extArgs += " --add-header \"Accept-Language:en-US,en;q=0.9\"";
+            }
             string cookiesPath = Path.Combine(appDir, "cookies.txt");
             if (!File.Exists(cookiesPath)) cookiesPath = Path.Combine(saveDir, "cookies.txt");
             string cookiesArg = File.Exists(cookiesPath) ? string.Format("--cookies \"{0}\"", cookiesPath) : "";
@@ -933,14 +938,19 @@ namespace TurboDownloader
                             double fps = 0;
                             if (f.ContainsKey("fps") && f["fps"] != null) double.TryParse(Convert.ToString(f["fps"]), out fps);
 
-                            // Video Streams
-                            if (vcodec != "none" && !string.IsNullOrEmpty(vcodec))
+                            // Video Streams (support YouTube, Instagram, Facebook hd/sd, TikTok, etc.)
+                            bool isVideo = (vcodec != "none" && !string.IsNullOrEmpty(vcodec)) ||
+                                           height > 0 || width > 0 ||
+                                           formatId.IndexOf("hd", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                                           formatId.IndexOf("sd", StringComparison.OrdinalIgnoreCase) >= 0;
+
+                            if (isVideo)
                             {
                                 // Infer height if 0 (e.g. Facebook "hd" / "sd")
                                 if (height == 0)
                                 {
-                                    if (formatId == "hd" || width >= 1920) height = 1080;
-                                    else if (formatId == "sd" || width >= 854) height = 480;
+                                    if (formatId.IndexOf("hd", StringComparison.OrdinalIgnoreCase) >= 0 || width >= 1920) { height = 1080; if (width == 0) width = 1920; }
+                                    else if (formatId.IndexOf("sd", StringComparison.OrdinalIgnoreCase) >= 0 || width >= 854) { height = 480; if (width == 0) width = 854; }
                                     else if (width >= 3840) height = 2160;
                                     else if (width >= 2560) height = 1440;
                                     else if (width >= 1280) height = 720;
@@ -1123,6 +1133,31 @@ namespace TurboDownloader
                 return;
             }
 
+            bool force = reqObj.ContainsKey("force") && Convert.ToBoolean(reqObj["force"]);
+            if (!force)
+            {
+                foreach (var kvp in jobs)
+                {
+                    if (kvp.Value.url == url && kvp.Value.status == "COMPLETED" &&
+                        !string.IsNullOrEmpty(kvp.Value.filePath) && File.Exists(kvp.Value.filePath))
+                    {
+                        SendJson(res, new {
+                            success = true,
+                            alreadyCompleted = true,
+                            data = new {
+                                id = kvp.Key,
+                                title = kvp.Value.title,
+                                filePath = kvp.Value.filePath,
+                                fileSizeBytes = kvp.Value.fileSizeBytes,
+                                requestedFormat = kvp.Value.requestedFormat,
+                                downloadUrl = kvp.Value.downloadUrl
+                            }
+                        });
+                        return;
+                    }
+                }
+            }
+
             string jobId = "job_" + Guid.NewGuid().ToString("N").Substring(0, 8);
 
             DownloadJob job = new DownloadJob();
@@ -1160,6 +1195,7 @@ namespace TurboDownloader
             if (!Regex.IsMatch(safeContainer, @"^[a-zA-Z0-9]+$")) safeContainer = "mp4";
 
             string safeUrl = job.url.Replace("\"", "%22").Replace("\r", "").Replace("\n", "");
+            bool isFacebook = safeUrl.IndexOf("facebook.com", StringComparison.OrdinalIgnoreCase) >= 0 || safeUrl.IndexOf("fb.watch", StringComparison.OrdinalIgnoreCase) >= 0;
 
             string formatArg;
             string mergeArg;
@@ -1188,16 +1224,31 @@ namespace TurboDownloader
                 if (heightMatch.Success)
                 {
                     int h = int.Parse(heightMatch.Groups[1].Value);
-                    if (isWebM)
+                    if (isFacebook)
                     {
-                        formatArg = string.Format("-f \"bestvideo[height<={0}][ext=webm]+bestaudio[ext=webm]/bestvideo[height<={0}][ext=webm]+bestaudio/bestvideo[height<={0}]+bestaudio/best[height<={0}]/bv*+ba/b\"", h);
+                        formatArg = string.Format("-f \"bestvideo[height<={0}]+bestaudio/best[height<={0}]/best[format_id*=hd]/best\"", h);
+                        mergeArg = "--merge-output-format mp4/mkv";
+                    }
+                    else if (isWebM)
+                    {
+                        formatArg = string.Format("-f \"bestvideo[height<={0}][ext=webm]+bestaudio[ext=webm]/bestvideo[height<={0}]+bestaudio/best[height<={0}]/bv*+ba/b\"", h);
                         mergeArg = "--merge-output-format webm/mkv";
                     }
                     else
                     {
-                        formatArg = string.Format("-f \"bestvideo[height<={0}][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<={0}][ext=mp4]+bestaudio/bestvideo[height<={0}]+bestaudio/best[height<={0}]/bv*+ba/b\"", h);
+                        formatArg = string.Format("-f \"bestvideo[height<={0}][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<={0}]+bestaudio/best[height<={0}]/bv*+ba/b\"", h);
                         mergeArg = "--merge-output-format mp4/mkv";
                     }
+                }
+                else if (isFacebook && (safeFormatId.IndexOf("hd", StringComparison.OrdinalIgnoreCase) >= 0 || safeFormatId == "best"))
+                {
+                    formatArg = "-f \"bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best[format_id*=hd]/best[ext=mp4]/best\"";
+                    mergeArg = "--merge-output-format mp4/mkv";
+                }
+                else if (isFacebook && safeFormatId.IndexOf("sd", StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    formatArg = "-f \"bestvideo[height<=480]+bestaudio/best[format_id*=sd]/best[height<=480]/best\"";
+                    mergeArg = "--merge-output-format mp4/mkv";
                 }
                 else if (string.IsNullOrEmpty(safeFormatId) || safeFormatId == "best")
                 {
@@ -1230,7 +1281,12 @@ namespace TurboDownloader
             string outTemplate = Path.Combine(saveDir, "%(title)s.%(ext)s");
             string np = GetNodePath();
             string jsRuntimeArg = !string.IsNullOrEmpty(np) ? string.Format("--js-runtimes node:\"{0}\"", np) : "";
-            string extArgs = "";
+            string userAgentArg = "--user-agent \"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36\"";
+            string extArgs = userAgentArg;
+            if (isFacebook)
+            {
+                extArgs += " --add-header \"Accept-Language:en-US,en;q=0.9\"";
+            }
             string cookiesPath = Path.Combine(appDir, "cookies.txt");
             if (!File.Exists(cookiesPath)) cookiesPath = Path.Combine(saveDir, "cookies.txt");
             string cookiesArg = File.Exists(cookiesPath) ? string.Format("--cookies \"{0}\"", cookiesPath) : "";
