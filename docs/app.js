@@ -393,7 +393,7 @@ function nativeHandoff(url, filename) {
 
   async function analyzeViaBackend(url, provider) {
     const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 12000);
+    const timer = setTimeout(() => ctrl.abort(), 35000);
     try {
       const res = await fetch(`${BACKEND_API_BASE}/media/analyze`, {
         method: "POST",

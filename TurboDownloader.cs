@@ -576,11 +576,12 @@ namespace TurboDownloader
             if (!File.Exists(ytdlp)) ytdlp = "yt-dlp.exe";
 
             string jsRuntimeArg = File.Exists(nodePath) ? string.Format("--js-runtimes node:\"{0}\"", nodePath) : "";
-            string extArgs = "--extractor-args \"youtube:player_client=android,ios,web\"";
+            string extArgs = "--extractor-args \"youtube:player_client=web_creator,web_embedded,mweb\"";
+            string cookiesArg = File.Exists(Path.Combine(appDir, "cookies.txt")) ? string.Format("--cookies \"{0}\"", Path.Combine(appDir, "cookies.txt")) : "";
 
             ProcessStartInfo psi = new ProcessStartInfo();
             psi.FileName = ytdlp;
-            psi.Arguments = string.Format("{0} {1} --dump-json --no-playlist \"{2}\"", jsRuntimeArg, extArgs, url);
+            psi.Arguments = string.Format("{0} {1} {2} --dump-json --no-playlist \"{3}\"", jsRuntimeArg, extArgs, cookiesArg, url);
             psi.CreateNoWindow = true;
             psi.UseShellExecute = false;
             psi.RedirectStandardOutput = true;
@@ -651,24 +652,32 @@ namespace TurboDownloader
                                 // Infer height if 0 (e.g. Facebook "hd" / "sd")
                                 if (height == 0)
                                 {
-                                    if (formatId == "hd") height = 1080;
-                                    else if (formatId == "sd") height = 480;
+                                    if (formatId == "hd" || width >= 1920) height = 1080;
+                                    else if (formatId == "sd" || width >= 854) height = 480;
+                                    else if (width >= 3840) height = 2160;
+                                    else if (width >= 2560) height = 1440;
+                                    else if (width >= 1280) height = 720;
+                                    else if (width >= 640) height = 360;
                                 }
 
-                                string resKey = height > 0 ? (height + "p") : formatId;
-                                string resLabel = resKey;
-                                if (height == 4320) resLabel = "4320p / 8K";
-                                else if (height == 2160) resLabel = "2160p / 4K";
-                                else if (height == 1440) resLabel = "1440p / 2K";
-                                else if (height == 1080) resLabel = "1080p / Full HD";
-                                else if (height == 720) resLabel = "720p / HD";
+                                string resLabel = height > 0 ? (height + "p") : formatId;
+                                if (height >= 4320 || width >= 7680) resLabel = "4320p / 8K";
+                                else if (height >= 2160 || width >= 3840) resLabel = "2160p / 4K";
+                                else if (height >= 1440 || width >= 2560) resLabel = "1440p / 2K";
+                                else if (height >= 1080 || width >= 1920) resLabel = "1080p / Full HD";
+                                else if (height >= 720 || width >= 1280) resLabel = "720p / HD";
+                                else if (height >= 480 || width >= 854) resLabel = "480p";
+                                else if (height >= 360 || width >= 640) resLabel = "360p";
+                                else if (height >= 240) resLabel = "240p";
+                                else if (height >= 144) resLabel = "144p";
 
                                 bool isHdr = false;
-                                if (f.ContainsKey("dynamic_range")) isHdr = Convert.ToString(f["dynamic_range"]).IndexOf("HDR", StringComparison.OrdinalIgnoreCase) >= 0;
+                                if (f.ContainsKey("dynamic_range") && f["dynamic_range"] != null)
+                                    isHdr = Convert.ToString(f["dynamic_range"]).IndexOf("HDR", StringComparison.OrdinalIgnoreCase) >= 0;
 
                                 VideoFormatDto vdto = new VideoFormatDto();
                                 vdto.formatId = formatId;
-                                vdto.resolution = resLabel;
+                                vdto.resolution = resLabel + (isHdr ? " HDR" : "");
                                 vdto.width = width;
                                 vdto.height = height;
                                 vdto.fps = fps;
@@ -678,10 +687,19 @@ namespace TurboDownloader
                                 vdto.estimatedSizeBytes = filesize;
                                 vdto.hdr = isHdr;
 
-                                // Keep best (prefer MP4 or higher filesize for each resolution tier)
-                                if (!resolutionMap.ContainsKey(resKey) || (filesize > resolutionMap[resKey].estimatedSizeBytes))
+                                // Group by resolution tier, keeping best FPS, HDR, or bitrate
+                                string groupKey = resLabel;
+                                if (!resolutionMap.ContainsKey(groupKey))
                                 {
-                                    resolutionMap[resKey] = vdto;
+                                    resolutionMap[groupKey] = vdto;
+                                }
+                                else
+                                {
+                                    VideoFormatDto existing = resolutionMap[groupKey];
+                                    if ((vdto.fps > existing.fps) || (vdto.hdr && !existing.hdr) || (vdto.estimatedSizeBytes > existing.estimatedSizeBytes))
+                                    {
+                                        resolutionMap[groupKey] = vdto;
+                                    }
                                 }
                             }
                             // Audio Streams
@@ -703,23 +721,34 @@ namespace TurboDownloader
                             }
                         }
 
-                        // Sort video formats descending (8K -> 4K -> 2K -> 1080p -> 720p...)
+                        // Sort video formats descending by pixel count (8K -> 4K -> 2K -> 1080p -> 720p...)
                         videoFormats = new List<VideoFormatDto>(resolutionMap.Values);
-                        videoFormats.Sort((a, b) => b.height.CompareTo(a.height));
+                        videoFormats.Sort((a, b) =>
+                        {
+                            long aPixels = (long)a.width * (long)a.height;
+                            long bPixels = (long)b.width * (long)b.height;
+                            int cmp = bPixels.CompareTo(aPixels);
+                            if (cmp != 0) return cmp;
+                            cmp = b.height.CompareTo(a.height);
+                            if (cmp != 0) return cmp;
+                            cmp = b.fps.CompareTo(a.fps);
+                            if (cmp != 0) return cmp;
+                            return b.estimatedSizeBytes.CompareTo(a.estimatedSizeBytes);
+                        });
 
                         // Sort audio formats descending
                         audioFormats.Sort((a, b) => b.bitrateKbps.CompareTo(a.bitrateKbps));
                     }
 
-                    // Always ensure Best format exists
-                    if (videoFormats.Count == 0)
-                    {
-                        VideoFormatDto bestDto = new VideoFormatDto();
-                        bestDto.formatId = "best";
-                        bestDto.resolution = "Best Quality";
-                        bestDto.container = "mp4";
-                        videoFormats.Add(bestDto);
-                    }
+                    // Always ensure Maximum Quality format is prepended at index 0
+                    VideoFormatDto maxDto = new VideoFormatDto();
+                    maxDto.formatId = "best";
+                    maxDto.resolution = videoFormats.Count > 0 ? string.Format("Maximum Quality ({0})", videoFormats[0].resolution) : "Maximum Quality (Best Available)";
+                    maxDto.container = "mp4";
+                    maxDto.fps = videoFormats.Count > 0 ? videoFormats[0].fps : 60;
+                    maxDto.width = videoFormats.Count > 0 ? videoFormats[0].width : 3840;
+                    maxDto.height = videoFormats.Count > 0 ? videoFormats[0].height : 2160;
+                    videoFormats.Insert(0, maxDto);
 
                     if (audioFormats.Count == 0)
                     {
@@ -800,19 +829,20 @@ namespace TurboDownloader
             }
             else if (!string.IsNullOrEmpty(formatId) && formatId != "best")
             {
-                formatArg = string.Format("-f \"{0}+bestaudio/bestvideo+bestaudio/best\"", formatId);
+                formatArg = string.Format("-f \"{0}+bestaudio[ext=m4a]/{0}+bestaudio/{0}/bv*+ba/b\"", formatId);
             }
             else
             {
-                formatArg = "-f \"bestvideo+bestaudio/best\"";
+                formatArg = "-f \"bv*+ba/b\"";
             }
 
             string outTemplate = Path.Combine(saveDir, "%(title)s.%(ext)s");
             string jsRuntimeArg = File.Exists(nodePath) ? string.Format("--js-runtimes node:\"{0}\"", nodePath) : "";
-            string extArgs = "--extractor-args \"youtube:player_client=android,ios,web\"";
+            string extArgs = "--extractor-args \"youtube:player_client=web_creator,web_embedded,mweb\"";
+            string cookiesArg = File.Exists(Path.Combine(appDir, "cookies.txt")) ? string.Format("--cookies \"{0}\"", Path.Combine(appDir, "cookies.txt")) : "";
 
-            string args = string.Format("{0} {1} {2} {3} --ffmpeg-location \"{4}\" --newline --no-playlist --no-mtime --windows-filenames -o \"{5}\" \"{6}\"",
-                jsRuntimeArg, extArgs, formatArg, mergeArg, ffmpeg, outTemplate, job.url);
+            string args = string.Format("{0} {1} {2} {3} {4} --ffmpeg-location \"{5}\" --newline --no-playlist --no-mtime --windows-filenames -o \"{6}\" \"{7}\"",
+                jsRuntimeArg, extArgs, cookiesArg, formatArg, mergeArg, ffmpeg, outTemplate, job.url);
 
             job.status = "DOWNLOADING";
 
