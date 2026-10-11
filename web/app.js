@@ -485,7 +485,7 @@ async function triggerSaveAs(url, filename) {
     const host = String(window.location.hostname || "").toLowerCase();
     if (port === "4000" || host === "127.0.0.1" || host === "localhost") return true;
     if (window.DESKTOP_CONNECTED === true) return true;
-    if (typeof localStorage !== "undefined" && localStorage.getItem("turbodownloader_installed") === "true") return true;
+    if (typeof localStorage !== "undefined" && (localStorage.getItem("180hzdownloader_installed") === "true" || localStorage.getItem("turbodownloader_installed") === "true")) return true;
     return false;
   }
 
@@ -502,7 +502,7 @@ async function triggerSaveAs(url, filename) {
         navAppBtn.textContent = "⚡ Engine Active";
         navAppBtn.removeAttribute("download");
         navAppBtn.href = "#console";
-        navAppBtn.title = "TurboDownloader Desktop Engine is Connected & Ready";
+        navAppBtn.title = "180Hz Downloader Desktop Engine is Connected & Ready";
         navAppBtn.style.background = "rgba(216,255,62,0.15)";
         navAppBtn.style.color = "var(--lime)";
         navAppBtn.style.border = "1px solid var(--lime)";
@@ -526,7 +526,7 @@ async function triggerSaveAs(url, filename) {
       clearTimeout(t);
       if (res && res.ok) {
         window.DESKTOP_CONNECTED = true;
-        if (typeof localStorage !== "undefined") localStorage.setItem("turbodownloader_installed", "true");
+        if (typeof localStorage !== "undefined") localStorage.setItem("180hzdownloader_installed", "true");
         updateDesktopUiBadges();
       }
     } catch {}
@@ -1525,12 +1525,12 @@ async function triggerSaveAs(url, filename) {
         window.open(`http://127.0.0.1:4000/?url=${encodeURIComponent(mediaUrl)}`, "_blank");
       } else {
         if (typeof localStorage !== "undefined") {
-          localStorage.setItem("turbodownloader_installed", "true");
+          localStorage.setItem("180hzdownloader_installed", "true");
         }
-        // Automatically trigger 1-click download of TurboDownloaderSetup.exe
+        // Automatically trigger 1-click download of 180Hz Downloader Setup.exe
         const a = document.createElement("a");
-        a.href = "TurboDownloaderSetup.exe";
-        a.download = "TurboDownloaderSetup.exe";
+        a.href = "180Hz Downloader Setup.exe";
+        a.download = "180Hz Downloader Setup.exe";
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -1549,7 +1549,7 @@ async function triggerSaveAs(url, filename) {
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
             <div style="display:flex;align-items:center;gap:8px;">
               ${IC.zap}
-              <strong style="color:var(--lime);font-size:12px;letter-spacing:.12em;text-transform:uppercase;">TURBODOWNLOADER 8K DESKTOP ENGINE</strong>
+              <strong style="color:var(--lime);font-size:12px;letter-spacing:.12em;text-transform:uppercase;">180HZ DOWNLOADER 8K DESKTOP ENGINE</strong>
             </div>
             <span class="tag done" style="font-size:10px;background:rgba(216,255,62,0.15);color:var(--lime);border:1px solid rgba(216,255,62,0.3);">${escapeHtml(formatLabel)}</span>
           </div>
@@ -1557,11 +1557,11 @@ async function triggerSaveAs(url, filename) {
             To download <strong>${escapeHtml(r.title || "this media")}</strong> in full bit-exact 4K/8K quality with untouched lossless audio, use the 1-click Windows desktop app:
           </p>
           <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px;">
-            <a href="TurboDownloaderSetup.exe" download="TurboDownloaderSetup.exe" class="chip" style="background:var(--lime);color:#000;font-weight:700;font-size:12px;padding:10px 22px;text-decoration:none;border-radius:8px;display:inline-flex;align-items:center;gap:8px;box-shadow:0 0 20px rgba(216,255,62,0.25);">
+            <a href="180Hz Downloader Setup.exe" download="180Hz Downloader Setup.exe" class="chip" style="background:var(--lime);color:#000;font-weight:700;font-size:12px;padding:10px 22px;text-decoration:none;border-radius:8px;display:inline-flex;align-items:center;gap:8px;box-shadow:0 0 20px rgba(216,255,62,0.25);">
               ${IC.dl} Download Windows App (.exe)
             </a>
             <button type="button" id="openTurboDesktopBtn" class="chip" style="background:rgba(124,92,255,0.25);color:#c4b5fd;border:1px solid rgba(124,92,255,0.6);font-size:11px;padding:10px 18px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;border-radius:8px;">
-              ${IC.zap} Open in TurboDownloader Desktop (Lossless 4K/8K)
+              ${IC.zap} Open in 180Hz Downloader Desktop (Lossless 4K/8K)
             </button>
           </div>
           <div style="padding-top:12px;border-top:1px solid rgba(255,255,255,0.06);font-size:11px;color:rgba(237,237,232,0.7);display:flex;gap:16px;flex-wrap:wrap;">

@@ -137,7 +137,7 @@ namespace TurboDownloader
                 ServicePointManager.SecurityProtocol = (SecurityProtocolType)3072 | (SecurityProtocolType)768 | SecurityProtocolType.Tls;
                 using (WebClient wc = new WebClient())
                 {
-                    wc.Headers.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) TurboDownloader/2.0");
+                    wc.Headers.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) 180HzDownloader/2.0");
                     wc.DownloadFile(url, tempFile);
                     if (File.Exists(tempFile) && new FileInfo(tempFile).Length > 100000)
                     {
@@ -315,13 +315,13 @@ namespace TurboDownloader
                 }
                 EnsureDependencies();
 
-                portFilePath = Path.Combine(Path.GetTempPath(), "turbodownloader_180hz.port");
+                portFilePath = Path.Combine(Path.GetTempPath(), "180hz_downloader.port");
 
                 // Check single-instance mutex
                 bool createdNew = false;
                 try
                 {
-                    appMutex = new Mutex(true, "Global\\TurboDownloader_180hz_SingleInstance", out createdNew);
+                    appMutex = new Mutex(true, "Global\\180HzDownloader_SingleInstance", out createdNew);
                 }
                 catch (AbandonedMutexException)
                 {
@@ -329,7 +329,7 @@ namespace TurboDownloader
                 }
                 catch
                 {
-                    try { appMutex = new Mutex(true, "Local\\TurboDownloader_180hz_SingleInstance", out createdNew); } catch { createdNew = true; }
+                    try { appMutex = new Mutex(true, "Local\\180HzDownloader_SingleInstance", out createdNew); } catch { createdNew = true; }
                 }
 
                 if (!createdNew)
@@ -338,13 +338,18 @@ namespace TurboDownloader
                     bool anotherIsRunning = false;
                     try
                     {
-                        foreach (Process p in Process.GetProcessesByName("TurboDownloader"))
+                        string[] checkNames = new string[] { "180Hz Downloader", "180HzDownloader", "TurboDownloader" };
+                        foreach (string cName in checkNames)
                         {
-                            if (p.Id != currentProc.Id)
+                            foreach (Process p in Process.GetProcessesByName(cName))
                             {
-                                anotherIsRunning = true;
-                                break;
+                                if (p.Id != currentProc.Id)
+                                {
+                                    anotherIsRunning = true;
+                                    break;
+                                }
                             }
+                            if (anotherIsRunning) break;
                         }
                     }
                     catch { }
@@ -499,7 +504,7 @@ namespace TurboDownloader
                 Application.SetCompatibleTextRenderingDefault(false);
 
                 trayIcon = new NotifyIcon();
-                trayIcon.Text = string.Format("180hz TurboDownloader (Port {0})", port);
+                trayIcon.Text = string.Format("180Hz Downloader (Port {0})", port);
                 try
                 {
                     string icoPath = Path.Combine(appDir, "app.ico");
@@ -513,12 +518,12 @@ namespace TurboDownloader
                 trayIcon.Visible = true;
 
                 ContextMenu menu = new ContextMenu();
-                menu.MenuItems.Add(new MenuItem("🌐 Open TurboDownloader", (s, e) => LaunchNativeWindow(port)));
+                menu.MenuItems.Add(new MenuItem("🌐 Open 180Hz Downloader", (s, e) => LaunchNativeWindow(port)));
                 menu.MenuItems.Add(new MenuItem("📂 Open Downloads Folder", (s, e) => {
                     try { Process.Start("explorer.exe", saveDir); } catch { }
                 }));
                 menu.MenuItems.Add("-");
-                menu.MenuItems.Add(new MenuItem("❌ Exit TurboDownloader", (s, e) => {
+                menu.MenuItems.Add(new MenuItem("❌ Exit 180Hz Downloader", (s, e) => {
                     CleanUp();
                     Application.Exit();
                 }));
@@ -526,9 +531,12 @@ namespace TurboDownloader
                 trayIcon.ContextMenu = menu;
                 trayIcon.DoubleClick += (s, e) => LaunchNativeWindow(port);
 
-                Application.Run();
+                Application.Run(new ApplicationContext());
             }
-            catch { }
+            catch (Exception ex)
+            {
+                try { File.AppendAllText(Path.Combine(appDir, "tray.log"), ex.ToString() + "\r\n"); } catch { }
+            }
 
             while (listener != null && listener.IsListening)
             {
@@ -698,7 +706,7 @@ namespace TurboDownloader
                 {
                     SendJson(res, new {
                         success = true,
-                        engine = "TurboDownloader 2.0 (PEAK/8K Engine)",
+                        engine = "180Hz Downloader 2.0 (PEAK/8K Engine)",
                         status = depStatusMessage,
                         isReady = File.Exists(ytdlpPath) && File.Exists(ffmpegPath),
                         isUpdating = isUpdatingYtDlp,
@@ -765,7 +773,7 @@ namespace TurboDownloader
                 }
                 else if (rawUrl == "/api/v1/system/exit" && req.HttpMethod == "POST")
                 {
-                    SendJson(res, new { success = true, message = "Shutting down TurboDownloader" });
+                    SendJson(res, new { success = true, message = "Shutting down 180Hz Downloader" });
                     Task.Factory.StartNew(() =>
                     {
                         Thread.Sleep(400);

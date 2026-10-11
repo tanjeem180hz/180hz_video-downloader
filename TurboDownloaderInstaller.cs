@@ -22,14 +22,14 @@ namespace TurboDownloaderInstaller
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Installation encountered an issue: " + ex.Message, "TurboDownloader Setup", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show("Installation encountered an issue: " + ex.Message, "180Hz Downloader Setup", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
         static void RunInstaller()
         {
             string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-            string installDir = Path.Combine(localAppData, "Programs", "TurboDownloader");
+            string installDir = Path.Combine(localAppData, "Programs", "180Hz Downloader");
             if (!Directory.Exists(installDir))
             {
                 Directory.CreateDirectory(installDir);
@@ -38,15 +38,21 @@ namespace TurboDownloaderInstaller
             // Close any existing instances before updating files
             try
             {
-                foreach (Process p in Process.GetProcessesByName("TurboDownloader"))
+                string[] procNames = new string[] { "180Hz Downloader", "180HzDownloader", "TurboDownloader" };
+                foreach (string name in procNames)
                 {
-                    try { p.Kill(); p.WaitForExit(3000); } catch { }
+                    foreach (Process p in Process.GetProcessesByName(name))
+                    {
+                        try { p.Kill(); p.WaitForExit(3000); } catch { }
+                    }
                 }
             }
             catch { }
 
-            // Extract or copy application files
+            // Extract or copy application files (support both names for 100% compatibility)
+            ExtractResourceOrCopy("180Hz Downloader.exe", Path.Combine(installDir, "180Hz Downloader.exe"));
             ExtractResourceOrCopy("TurboDownloader.exe", Path.Combine(installDir, "TurboDownloader.exe"));
+            try { File.Copy(Path.Combine(installDir, "180Hz Downloader.exe"), Path.Combine(installDir, "180HzDownloader.exe"), true); } catch { }
 
             string webDir = Path.Combine(installDir, "web");
             if (!Directory.Exists(webDir)) Directory.CreateDirectory(webDir);
@@ -60,7 +66,7 @@ namespace TurboDownloaderInstaller
             ExtractResourceOrCopy("app.ico", Path.Combine(installDir, "app.ico"));
 
             // Create Desktop and Start Menu Shortcuts
-            CreateShortcuts(Path.Combine(installDir, "TurboDownloader.exe"));
+            CreateShortcuts(Path.Combine(installDir, "180Hz Downloader.exe"));
 
             // Check & copy local dependencies if present
             string ytdlpTarget = Path.Combine(installDir, "yt-dlp.exe");
@@ -109,7 +115,8 @@ namespace TurboDownloaderInstaller
             }
 
             // Launch the application
-            string targetExe = Path.Combine(installDir, "TurboDownloader.exe");
+            string targetExe = Path.Combine(installDir, "180Hz Downloader.exe");
+            if (!File.Exists(targetExe)) targetExe = Path.Combine(installDir, "TurboDownloader.exe");
             if (File.Exists(targetExe))
             {
                 ProcessStartInfo psi = new ProcessStartInfo();
@@ -118,7 +125,7 @@ namespace TurboDownloaderInstaller
                 Process.Start(psi);
             }
 
-            MessageBox.Show("TurboDownloader 2.0 (PEAK/8K Engine) installed successfully!\n\n• Desktop shortcut has been created.\n• The application is now running and ready to download.", "TurboDownloader Setup", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            MessageBox.Show("180Hz Downloader 2.0 (PEAK/8K Engine) installed successfully!\n\n• Desktop shortcut has been created.\n• The application is now running and ready to download.", "180Hz Downloader Setup", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
         static void ExtractResourceOrCopy(string resourceName, string targetPath)
@@ -169,23 +176,23 @@ namespace TurboDownloaderInstaller
                     dynamic shell = Activator.CreateInstance(t);
 
                     string desktop = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
-                    string desktopLnk = Path.Combine(desktop, "TurboDownloader 8K.lnk");
+                    string desktopLnk = Path.Combine(desktop, "180Hz Downloader.lnk");
                     string icoPath = Path.Combine(Path.GetDirectoryName(exePath), "app.ico");
 
                     var sc = shell.CreateShortcut(desktopLnk);
                     sc.TargetPath = exePath;
                     sc.WorkingDirectory = Path.GetDirectoryName(exePath);
-                    sc.Description = "TurboDownloader 2.0 - Bit-Exact 4K/8K Media Downloader";
+                    sc.Description = "180Hz Downloader 2.0 - Bit-Exact 4K/8K Media Downloader";
                     if (File.Exists(icoPath)) sc.IconLocation = icoPath + ",0";
                     else sc.IconLocation = exePath + ",0";
                     sc.Save();
 
                     string startMenu = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.StartMenu), "Programs");
-                    string startLnk = Path.Combine(startMenu, "TurboDownloader 8K.lnk");
+                    string startLnk = Path.Combine(startMenu, "180Hz Downloader.lnk");
                     var sc2 = shell.CreateShortcut(startLnk);
                     sc2.TargetPath = exePath;
                     sc2.WorkingDirectory = Path.GetDirectoryName(exePath);
-                    sc2.Description = "TurboDownloader 2.0 - Bit-Exact 4K/8K Media Downloader";
+                    sc2.Description = "180Hz Downloader 2.0 - Bit-Exact 4K/8K Media Downloader";
                     if (File.Exists(icoPath)) sc2.IconLocation = icoPath + ",0";
                     else sc2.IconLocation = exePath + ",0";
                     sc2.Save();
@@ -202,7 +209,7 @@ namespace TurboDownloaderInstaller
                 ServicePointManager.SecurityProtocol = (SecurityProtocolType)3072 | (SecurityProtocolType)768 | SecurityProtocolType.Tls;
                 using (WebClient wc = new WebClient())
                 {
-                    wc.Headers.Add("User-Agent", "Mozilla/5.0 TurboDownloaderSetup/2.0");
+                    wc.Headers.Add("User-Agent", "Mozilla/5.0 180HzDownloaderSetup/2.0");
                     wc.DownloadFile(url, temp);
                     if (File.Exists(temp) && new FileInfo(temp).Length > 10000)
                     {

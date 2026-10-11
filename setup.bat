@@ -1,6 +1,6 @@
 @echo off
 echo ========================================================
-echo   TurboDownloader 2.0 (PEAK/8K Engine) Setup
+echo   180Hz Downloader 2.0 (PEAK/8K Engine) Setup
 echo ========================================================
 echo Checking dependencies...
 
@@ -23,9 +23,9 @@ if not exist "ffmpeg.exe" (
 )
 
 echo.
-echo Compiling TurboDownloader.exe...
+echo Compiling 180Hz Downloader.exe...
 call build.bat
 
 echo.
-echo Setup completed successfully! You can now run TurboDownloader.exe
+echo Setup completed successfully! You can now run 180Hz Downloader.exe
 pause

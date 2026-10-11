@@ -1,6 +1,6 @@
 <p align="center">
   <a href="https://tanjeem180hz.github.io/180hz_video-downloader/">
-    <img src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=800&size=26&pause=1000&color=D8FF3E&center=true&vCenter=true&random=false&width=620&height=70&lines=%E2%9A%A1+TURBODOWNLOADER+2.0+%7C+PEAK+8K;%F0%9F%8E%AC+Bit-Exact+4K+%26+8K+Lossless+Video;%F0%9F%8E%B5+320+kbps+Studio+MP3+Audio+Pipeline;%F0%9F%9A%80+Universal+YouTube%2C+Insta%2C+FB%2C+TikTok;%F0%9F%9B%A1%EF%B8%8F+1-Click+Installer+%E2%80%94+Auto+FFmpeg+%26+yt-dlp" alt="TurboDownloader Typist Animation" />
+    <img src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=800&size=26&pause=1000&color=D8FF3E&center=true&vCenter=true&random=false&width=620&height=70&lines=%E2%9A%A1+180HZ+DOWNLOADER+2.0+%7C+PEAK+8K;%F0%9F%8E%AC+Bit-Exact+4K+%26+8K+Lossless+Video;%F0%9F%8E%B5+320+kbps+Studio+MP3+Audio+Pipeline;%F0%9F%9A%80+Universal+YouTube%2C+Insta%2C+FB%2C+TikTok;%F0%9F%9B%A1%EF%B8%8F+1-Click+Installer+%E2%80%94+Auto+FFmpeg+%26+yt-dlp" alt="180Hz Downloader Typist Animation" />
   </a>
 </p>
 
@@ -9,14 +9,14 @@
 </p>
 
 <p align="center">
-  <a href="https://tanjeem180hz.github.io/180hz_video-downloader/TurboDownloaderSetup.exe">
-    <img src="https://img.shields.io/badge/%E2%AC%87%EF%B8%8F_DOWNLOAD_NOW-TURBODOWNLOADER_SETUP.EXE-D8FF3E?style=for-the-badge&logo=windows&logoColor=000000&labelColor=111111" height="58" alt="Download Windows Installer" />
+  <a href="https://tanjeem180hz.github.io/180hz_video-downloader/180HzDownloaderSetup.exe">
+    <img src="https://img.shields.io/badge/%E2%AC%87%EF%B8%8F_DOWNLOAD_NOW-180HZ_DOWNLOADER_SETUP.EXE-D8FF3E?style=for-the-badge&logo=windows&logoColor=000000&labelColor=111111" height="58" alt="Download Windows Installer" />
   </a>
 </p>
 
 <p align="center">
-  <a href="https://tanjeem180hz.github.io/180hz_video-downloader/TurboDownloaderSetup.exe">
-    <strong>⚡ Click here to download TurboDownloader (1-Click Auto Setup for Windows) ⚡</strong>
+  <a href="https://tanjeem180hz.github.io/180hz_video-downloader/180HzDownloaderSetup.exe">
+    <strong>⚡ Click here to download 180Hz Downloader (1-Click Auto Setup for Windows) ⚡</strong>
   </a>
 </p>
 
@@ -52,7 +52,7 @@ Launch the official interactive web downloader in your browser right now:
   │      320k (Studio/Lossless), 192k (HQ), 128k (Standard), 64k (Voice).  │
   │                                                                        │
   │  03. 1-CLICK WINDOWS SETUP INSTALLER                                   │
-  │      TurboDownloaderSetup.exe automatically downloads & configures     │
+  │      180Hz Downloader Setup automatically downloads & configures       │
   │      yt-dlp and FFmpeg with zero technical steps needed.               │
   │                                                                        │
   │  04. SMART PLAYER LAUNCH & FASTSTART                                   │
@@ -92,15 +92,15 @@ After any download completes, four dedicated actions are immediately available:
 Use the official 1-click installer below:
 
 <p align="center">
-  <a href="https://tanjeem180hz.github.io/180hz_video-downloader/TurboDownloaderSetup.exe">
-    <img src="https://img.shields.io/badge/%E2%AC%87%EF%B8%8F_DOWNLOAD_NOW-TURBODOWNLOADERSETUP.EXE-D8FF3E?style=for-the-badge&logo=windows&logoColor=000000&labelColor=111111" height="52" alt="Download TurboDownloaderSetup.exe" />
+  <a href="https://tanjeem180hz.github.io/180hz_video-downloader/180HzDownloaderSetup.exe">
+    <img src="https://img.shields.io/badge/%E2%AC%87%EF%B8%8F_DOWNLOAD_NOW-180HZ_DOWNLOADER_SETUP.EXE-D8FF3E?style=for-the-badge&logo=windows&logoColor=000000&labelColor=111111" height="52" alt="Download 180Hz Downloader Setup" />
   </a>
 </p>
 
 ### ⚡ Easy 3-Step Setup:
-1. **Download:** Click the button above to download **[`TurboDownloaderSetup.exe`](https://tanjeem180hz.github.io/180hz_video-downloader/TurboDownloaderSetup.exe)**.
+1. **Download:** Click the button above to download **[`180Hz Downloader Setup.exe`](https://tanjeem180hz.github.io/180hz_video-downloader/180HzDownloaderSetup.exe)**.
 2. **Install:** Run the installer — it automatically configures all dependencies (`yt-dlp` & `ffmpeg`) and adds Desktop shortcuts.
-3. **Download Anything:** Launch TurboDownloader from your Desktop or open the [Live Web Portal](https://tanjeem180hz.github.io/180hz_video-downloader/) to download any video or audio at maximum speed!
+3. **Download Anything:** Launch 180Hz Downloader from your Desktop or open the [Live Web Portal](https://tanjeem180hz.github.io/180hz_video-downloader/) to download any video or audio at maximum speed!
 
 ---
 
