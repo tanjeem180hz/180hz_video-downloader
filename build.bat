@@ -24,6 +24,8 @@ if %ERRORLEVEL% NEQ 0 (
 
 copy /Y "TurboDownloaderSetup.exe" "web\TurboDownloaderSetup.exe" >nul
 copy /Y "TurboDownloader.exe" "web\TurboDownloader.exe" >nul
+copy /Y "TurboDownloaderSetup.exe" "docs\TurboDownloaderSetup.exe" >nul
+copy /Y "TurboDownloader.exe" "docs\TurboDownloader.exe" >nul
 
 echo.
 echo ========================================================

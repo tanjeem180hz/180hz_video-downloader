@@ -5,10 +5,11 @@ echo ========================================================
 echo Checking dependencies...
 
 if not exist "yt-dlp.exe" (
-    echo Downloading yt-dlp.exe...
-    curl.exe -L "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe" -o "yt-dlp.exe"
+    echo Downloading yt-dlp.exe (Latest Nightly Engine)...
+    curl.exe -L "https://github.com/yt-dlp/yt-dlp-nightly-builds/releases/latest/download/yt-dlp.exe" -o "yt-dlp.exe"
 ) else (
-    echo yt-dlp.exe is already present.
+    echo Updating yt-dlp.exe to latest engine...
+    yt-dlp.exe --update-to nightly
 )
 
 if not exist "ffmpeg.exe" (

@@ -151,11 +151,39 @@ namespace TurboDownloader
             return false;
         }
 
+        private static bool isUpdatingYtDlp = false;
+        private static void CheckUpdateYtDlp()
+        {
+            if (isUpdatingYtDlp || !File.Exists(ytdlpPath)) return;
+            isUpdatingYtDlp = true;
+            Task.Factory.StartNew(() =>
+            {
+                try
+                {
+                    ProcessStartInfo psi = new ProcessStartInfo();
+                    psi.FileName = ytdlpPath;
+                    psi.Arguments = "--update-to nightly";
+                    psi.CreateNoWindow = true;
+                    psi.UseShellExecute = false;
+                    using (Process p = Process.Start(psi))
+                    {
+                        p.WaitForExit(90000);
+                    }
+                }
+                catch { }
+                finally
+                {
+                    isUpdatingYtDlp = false;
+                }
+            });
+        }
+
         private static void EnsureDependencies()
         {
             if (File.Exists(ytdlpPath) && File.Exists(ffmpegPath))
             {
                 depStatusMessage = "Ready";
+                CheckUpdateYtDlp();
                 return;
             }
 
@@ -166,12 +194,16 @@ namespace TurboDownloader
             {
                 try
                 {
-                    // 1. Download yt-dlp.exe if missing
+                    // 1. Download yt-dlp.exe (nightly with latest YouTube player/challenge fixes) if missing
                     if (!File.Exists(ytdlpPath))
                     {
                         depStatusMessage = "Downloading extraction engine (yt-dlp)...";
-                        string ytdlpUrl = "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe";
+                        string ytdlpUrl = "https://github.com/yt-dlp/yt-dlp-nightly-builds/releases/latest/download/yt-dlp.exe";
                         DownloadFileWithFallback(ytdlpUrl, ytdlpPath);
+                    }
+                    else
+                    {
+                        CheckUpdateYtDlp();
                     }
 
                     // 2. Locate or download ffmpeg.exe if missing
@@ -223,8 +255,19 @@ namespace TurboDownloader
 
         private static string GetNodePath()
         {
-            if (File.Exists(@"C:\Program Files\nodejs\node.exe")) return @"C:\Program Files\nodejs\node.exe";
-            if (File.Exists(@"C:\Program Files (x86)\nodejs\node.exe")) return @"C:\Program Files (x86)\nodejs\node.exe";
+            string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+            string[] candidates = new string[]
+            {
+                @"C:\Program Files\nodejs\node.exe",
+                @"C:\Program Files (x86)\nodejs\node.exe",
+                Path.Combine(localAppData, @"Programs\node\node.exe"),
+                Path.Combine(localAppData, @"Microsoft\WinGet\Links\node.exe"),
+                Path.Combine(appDir ?? "", "node.exe")
+            };
+            foreach (string c in candidates)
+            {
+                if (!string.IsNullOrEmpty(c) && File.Exists(c)) return c;
+            }
             try
             {
                 string envPath = Environment.GetEnvironmentVariable("PATH");
@@ -280,6 +323,10 @@ namespace TurboDownloader
                 {
                     appMutex = new Mutex(true, "Global\\TurboDownloader_180hz_SingleInstance", out createdNew);
                 }
+                catch (AbandonedMutexException)
+                {
+                    createdNew = true;
+                }
                 catch
                 {
                     try { appMutex = new Mutex(true, "Local\\TurboDownloader_180hz_SingleInstance", out createdNew); } catch { createdNew = true; }
@@ -287,15 +334,33 @@ namespace TurboDownloader
 
                 if (!createdNew)
                 {
-                    int existingPort = 4000;
-                    if (File.Exists(portFilePath))
+                    Process currentProc = Process.GetCurrentProcess();
+                    bool anotherIsRunning = false;
+                    try
                     {
-                        int p;
-                        if (int.TryParse(File.ReadAllText(portFilePath).Trim(), out p) && p > 0)
-                            existingPort = p;
+                        foreach (Process p in Process.GetProcessesByName("TurboDownloader"))
+                        {
+                            if (p.Id != currentProc.Id)
+                            {
+                                anotherIsRunning = true;
+                                break;
+                            }
+                        }
                     }
-                    LaunchNativeWindow(existingPort);
-                    return;
+                    catch { }
+
+                    if (anotherIsRunning)
+                    {
+                        int existingPort = 4000;
+                        if (File.Exists(portFilePath))
+                        {
+                            int p;
+                            if (int.TryParse(File.ReadAllText(portFilePath).Trim(), out p) && p > 0)
+                                existingPort = p;
+                        }
+                        LaunchNativeWindow(existingPort);
+                        return;
+                    }
                 }
 
                 try
@@ -633,10 +698,20 @@ namespace TurboDownloader
                 {
                     SendJson(res, new {
                         success = true,
-                        engine = "TurboDownloader 2.0",
+                        engine = "TurboDownloader 2.0 (PEAK/8K Engine)",
                         status = depStatusMessage,
                         isReady = File.Exists(ytdlpPath) && File.Exists(ffmpegPath),
+                        isUpdating = isUpdatingYtDlp,
                         port = port
+                    });
+                    return;
+                }
+                else if (rawUrl == "/api/v1/engine/update" && req.HttpMethod == "POST")
+                {
+                    CheckUpdateYtDlp();
+                    SendJson(res, new {
+                        success = true,
+                        message = "Engine update check initiated in background."
                     });
                     return;
                 }
@@ -931,6 +1006,9 @@ namespace TurboDownloader
                             string acodec = f.ContainsKey("acodec") ? Convert.ToString(f["acodec"]) : "none";
                             string formatId = f.ContainsKey("format_id") ? Convert.ToString(f["format_id"]) : "";
                             string ext = f.ContainsKey("ext") ? Convert.ToString(f["ext"]) : "mp4";
+
+                            if (ext == "mhtml" || formatId.StartsWith("sb") || formatId.IndexOf("storyboard", StringComparison.OrdinalIgnoreCase) >= 0) continue;
+                            if ((string.IsNullOrEmpty(vcodec) || vcodec == "none") && (string.IsNullOrEmpty(acodec) || acodec == "none")) continue;
 
                             long filesize = 0;
                             if (f.ContainsKey("filesize") && f["filesize"] != null) long.TryParse(Convert.ToString(f["filesize"]), out filesize);
@@ -1331,15 +1409,15 @@ namespace TurboDownloader
                     if (isWebM)
                     {
                         formatArg = targetHeight > 0
-                            ? string.Format("-f \"bestvideo[height<={0}][ext=webm]+bestaudio[ext=webm]/bestvideo[height<={0}]+bestaudio/best[height<={0}]/bv*+ba/b\" -S \"res:{0},acodec:opus\"", targetHeight)
+                            ? string.Format("-f \"bv*[height<={0}][ext=webm]+ba[ext=webm]/bv*[height<={0}]+ba/b[height<={0}]/bv*+ba/b\" -S \"res:{0},acodec:opus\"", targetHeight)
                             : "-f \"bv*[ext=webm]+ba[ext=webm]/bv*+ba/b\" -S \"res,acodec:opus\"";
                         mergeArg = "--merge-output-format webm";
                     }
                     else
                     {
                         formatArg = targetHeight > 0
-                            ? string.Format("-f \"best[height<={0}][ext=mp4]/bestvideo[height<={0}]+bestaudio/best[height<={0}]/best\" -S \"res:{0},acodec:m4a\"", targetHeight)
-                            : "-f \"best[ext=mp4]/bestvideo+bestaudio/best\" -S \"res,acodec:m4a\"";
+                            ? string.Format("-f \"bv*[height<={0}]+ba/b[height<={0}]/bv*+ba/b\" -S \"res:{0},acodec:m4a\"", targetHeight)
+                            : "-f \"bv*+ba/b\" -S \"res,acodec:m4a\"";
                         mergeArg = "--merge-output-format mp4";
                     }
                 }
@@ -1347,12 +1425,12 @@ namespace TurboDownloader
                 {
                     if (isWebM)
                     {
-                        formatArg = string.Format("-f \"bestvideo[height<={0}][ext=webm]+bestaudio[ext=webm]/bestvideo[height<={0}]+bestaudio/best[height<={0}]/bv*+ba/b\" -S \"res:{0},acodec:opus\"", targetHeight);
+                        formatArg = string.Format("-f \"bv*[height<={0}][ext=webm]+ba[ext=webm]/bv*[height<={0}]+ba/b[height<={0}]/bv*+ba/b\" -S \"res:{0},acodec:opus\"", targetHeight);
                         mergeArg = "--merge-output-format webm";
                     }
                     else
                     {
-                        formatArg = string.Format("-f \"best[height<={0}][ext=mp4]/bestvideo[height<={0}]+bestaudio/best[height<={0}]/best\" -S \"res:{0},acodec:m4a\"", targetHeight);
+                        formatArg = string.Format("-f \"bv*[height<={0}]+ba/b[height<={0}]/bv*+ba/b\" -S \"res:{0},acodec:m4a\"", targetHeight);
                         mergeArg = "--merge-output-format mp4";
                     }
                 }
@@ -1361,12 +1439,16 @@ namespace TurboDownloader
                     // Specific Format ID selected by user (e.g. 701, 401, 315, 299, 137, 18, 0, etc.)
                     if (isWebM)
                     {
-                        formatArg = string.Format("-f \"{0}[acodec!=none]/{0}+bestaudio[ext=webm]/{0}+bestaudio[acodec=opus]/{0}+bestaudio/{0}/best\" -S \"res,acodec:opus\"", safeFormatId);
+                        formatArg = targetHeight > 0
+                            ? string.Format("-f \"{0}[acodec!=none]/{0}+bestaudio[ext=webm]/{0}+bestaudio[acodec=opus]/{0}+ba/bv*[height<={1}]+ba/bv*+ba/b\" -S \"res:{1},acodec:opus\"", safeFormatId, targetHeight)
+                            : string.Format("-f \"{0}[acodec!=none]/{0}+bestaudio[ext=webm]/{0}+bestaudio[acodec=opus]/{0}+ba/bv*+ba/b\" -S \"res,acodec:opus\"", safeFormatId);
                         mergeArg = "--merge-output-format webm";
                     }
                     else
                     {
-                        formatArg = string.Format("-f \"{0}[acodec!=none]/{0}+bestaudio[ext=m4a]/{0}+bestaudio/{0}/best\" -S \"res,acodec:m4a\"", safeFormatId);
+                        formatArg = targetHeight > 0
+                            ? string.Format("-f \"{0}[acodec!=none]/{0}+bestaudio[ext=m4a]/{0}+ba/bv*[height<={1}]+ba/bv*+ba/b\" -S \"res:{1},acodec:m4a\"", safeFormatId, targetHeight)
+                            : string.Format("-f \"{0}[acodec!=none]/{0}+bestaudio[ext=m4a]/{0}+ba/bv*+ba/b\" -S \"res,acodec:m4a\"", safeFormatId);
                         mergeArg = "--merge-output-format mp4";
                     }
                 }
@@ -1398,6 +1480,7 @@ namespace TurboDownloader
 
             try
             {
+                StringBuilder errSb = new StringBuilder();
                 ProcessStartInfo psi = new ProcessStartInfo();
                 psi.FileName = ytdlp;
                 psi.Arguments = args;
@@ -1407,7 +1490,15 @@ namespace TurboDownloader
                 psi.RedirectStandardError = true;
                 psi.StandardOutputEncoding = Encoding.UTF8;
 
-                job.process = Process.Start(psi);
+                job.process = new Process();
+                job.process.StartInfo = psi;
+                job.process.ErrorDataReceived += (s, e) =>
+                {
+                    if (e.Data != null) errSb.AppendLine(e.Data);
+                };
+
+                job.process.Start();
+                job.process.BeginErrorReadLine();
 
                 string line;
                 while ((line = job.process.StandardOutput.ReadLine()) != null)
@@ -1474,9 +1565,9 @@ namespace TurboDownloader
                 }
                 else
                 {
-                    string err = job.process.StandardError.ReadToEnd();
+                    string err = errSb.ToString();
                     job.status = "FAILED";
-                    job.errorMessage = "Download error: " + err;
+                    job.errorMessage = "Download error: " + (string.IsNullOrEmpty(err) ? "Process exited with code " + job.process.ExitCode : err);
                     job.errorCode = "EXIT_" + job.process.ExitCode;
                 }
             }
@@ -1546,6 +1637,18 @@ namespace TurboDownloader
             {
                 job.progressPercent = 100;
                 job.status = "COMPLETED";
+                string prefix = "[download] ";
+                int pIdx = line.IndexOf(prefix);
+                if (pIdx >= 0)
+                {
+                    int endIdx = line.IndexOf(" has already been downloaded");
+                    if (endIdx > pIdx + prefix.Length)
+                    {
+                        string fn = line.Substring(pIdx + prefix.Length, endIdx - (pIdx + prefix.Length)).Trim();
+                        job.filePath = fn;
+                        job.title = Path.GetFileNameWithoutExtension(fn);
+                    }
+                }
             }
         }
 

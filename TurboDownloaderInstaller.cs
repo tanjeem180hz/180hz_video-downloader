@@ -81,7 +81,21 @@ namespace TurboDownloaderInstaller
             // If yt-dlp still missing, download it
             if (!File.Exists(ytdlpTarget))
             {
-                DownloadDependency("https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe", ytdlpTarget);
+                DownloadDependency("https://github.com/yt-dlp/yt-dlp-nightly-builds/releases/latest/download/yt-dlp.exe", ytdlpTarget);
+            }
+            else
+            {
+                // Run background update check to ensure latest signatures
+                try
+                {
+                    ProcessStartInfo upPsi = new ProcessStartInfo();
+                    upPsi.FileName = ytdlpTarget;
+                    upPsi.Arguments = "--update-to nightly";
+                    upPsi.CreateNoWindow = true;
+                    upPsi.UseShellExecute = false;
+                    Process.Start(upPsi);
+                }
+                catch { }
             }
 
             // If ffmpeg still missing, try system WinGet or PATH
