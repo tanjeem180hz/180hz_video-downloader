@@ -2039,7 +2039,7 @@ async function triggerSaveAs(url, filename) {
 
     let lampAudioVoice = null;
     try {
-      lampAudioVoice = new Audio("click.mp3");
+      lampAudioVoice = new Audio("click.mp3?v=2");
       lampAudioVoice.preload = "auto";
       lampAudioVoice.load();
     } catch (e) {}
@@ -2128,7 +2128,7 @@ async function triggerSaveAs(url, filename) {
     function playLampSound(on) {
       try {
         if (!lampAudioVoice) {
-          lampAudioVoice = new Audio("click.mp3");
+          lampAudioVoice = new Audio("click.mp3?v=2");
           lampAudioVoice.preload = "auto";
         }
 
