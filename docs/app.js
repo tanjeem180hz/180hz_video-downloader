@@ -130,25 +130,66 @@ function resolveDirect(u) {
   return { url: u.toString(), provider: u.hostname };
 }
 
-/* ---------------- particle field (high performance, low RAM) ---------------- */
-(function field() {
+/* ---------------- realistic volumetric downward photon stream simulation ---------------- */
+(function photonField() {
   const c = $("#field");
   if (!c) return;
   const ctx = c.getContext("2d", { alpha: true });
   let w = (c.width = innerWidth), h = (c.height = innerHeight);
   const mouse = { x: -1e4, y: -1e4 };
-  const N = Math.min(26, Math.max(16, Math.floor((w * h) / 75000)));
-  const parts = Array.from({ length: N }, () => ({
-    x: Math.random() * w, y: Math.random() * h,
-    vx: (Math.random() - 0.5) * 0.22, vy: (Math.random() - 0.5) * 0.22,
-    r: Math.random() * 1.4 + 0.5,
-    c: Math.random() > 0.82 ? "rgba(216,255,62,.7)" : Math.random() > 0.5 ? "rgba(124,92,255,.55)" : "rgba(237,237,232,.35)"
-  }));
+
+  const N = 145; // Photon particle count
+
+  const PALETTES = [
+    { prefix: "rgba(216, 255, 62, ", core: "rgba(255, 255, 255, ", glow: 8 },  // 180Hz Signature Lime
+    { prefix: "rgba(255, 255, 255, ", core: "rgba(255, 255, 255, ", glow: 10 }, // Incandescent White Core
+    { prefix: "rgba(255, 245, 190, ", core: "rgba(255, 255, 240, ", glow: 6 },  // Warm Filament Amber
+    { prefix: "rgba(180, 140, 255, ", core: "rgba(220, 200, 255, ", glow: 4 }   // High-Frequency Violet
+  ];
+
+  function createPhoton(seedY) {
+    let ratio = (Math.random() - 0.5) * 2;
+    ratio = Math.sign(ratio) * Math.pow(Math.abs(ratio), 1.25); // Concentration towards central core
+
+    const tier = Math.random();
+    let vy;
+    if (tier > 0.72) {
+      vy = 3.8 + Math.random() * 2.2; // High-energy fast photons
+    } else if (tier > 0.22) {
+      vy = 2.2 + Math.random() * 1.6; // Steady laminar beam photons
+    } else {
+      vy = 1.1 + Math.random() * 1.1; // Ambient micro-dust
+    }
+
+    const palIdx = Math.random() > 0.5 ? 0 : Math.random() > 0.4 ? 1 : Math.random() > 0.5 ? 2 : 3;
+    const pal = PALETTES[palIdx];
+
+    return {
+      x: w / 2,
+      y: seedY !== undefined ? seedY : Math.random() * h,
+      vy: vy,
+      ratio: ratio,
+      size: 0.65 + Math.random() * 1.45,
+      baseAlpha: 0.65 + Math.random() * 0.35,
+      colorPrefix: pal.prefix,
+      corePrefix: pal.core,
+      glow: pal.glow,
+      wavePhase: Math.random() * Math.PI * 2,
+      waveFreq: 0.02 + Math.random() * 0.035,
+      waveAmp: 0.2 + Math.random() * 0.75,
+      fadeIn: seedY !== undefined ? 0 : Math.random()
+    };
+  }
+
+  const parts = Array.from({ length: N }, () => createPhoton());
 
   let rafId = null;
   let running = true;
 
-  function onResize() { w = c.width = innerWidth; h = c.height = innerHeight; }
+  function onResize() {
+    w = c.width = innerWidth;
+    h = c.height = innerHeight;
+  }
   addEventListener("resize", onResize, { passive: true });
   addEventListener("mousemove", (e) => { mouse.x = e.clientX; mouse.y = e.clientY; }, { passive: true });
   addEventListener("mouseout", () => { mouse.x = -1e4; mouse.y = -1e4; }, { passive: true });
@@ -164,47 +205,126 @@ function resolveDirect(u) {
     }
   });
 
-  const LINK = 110;
-  const LINK2 = LINK * LINK;
+  // Global trigger for ignition burst when lamp powers on
+  window.triggerPhotonIgnition = function() {
+    for (let i = 0; i < parts.length; i++) {
+      const p = parts[i];
+      p.y = 110 + Math.random() * 80;
+      p.fadeIn = 0.25;
+      p.vy = 4.6 + Math.random() * 3.6;
+    }
+  };
 
   function tick() {
     if (!running) return;
     ctx.clearRect(0, 0, w, h);
 
-    for (let i = 0; i < parts.length; i++) {
-      const p = parts[i];
-      const dx = mouse.x - p.x, dy = mouse.y - p.y;
-      const d2 = dx * dx + dy * dy;
-      if (d2 < 40000 && d2 > 40) {
-        const invD = 0.012 / Math.sqrt(d2);
-        p.vx += dx * invD;
-        p.vy += dy * invD;
+    const isLampOn = document.body.classList.contains("lamp-on");
+    if (!isLampOn) {
+      rafId = requestAnimationFrame(tick);
+      return;
+    }
+
+    // Dynamic origin of lamp fixture in viewport coordinates
+    const lampHead = document.getElementById("lampClickableHead") || document.getElementById("studioLampSvg");
+    let originX = w / 2;
+    let originY = 110;
+    if (lampHead) {
+      const rect = lampHead.getBoundingClientRect();
+      if (rect.width > 0) {
+        originX = rect.left + rect.width / 2;
+        originY = rect.bottom - 10;
       }
-      p.x += p.vx; p.y += p.vy;
-      p.vx *= 0.985; p.vy *= 0.985;
-      if (p.x < -10) p.x = w + 10; else if (p.x > w + 10) p.x = -10;
-      if (p.y < -10) p.y = h + 10; else if (p.y > h + 10) p.y = -10;
+    }
+
+    const topHalfWidth = 36;
+    const bottomHalfWidth = Math.min(w * 0.48, Math.max(500, w * 0.45));
+    const coneHeight = Math.max(1, h - originY);
+
+    // 1. Soft Volumetric God Rays (Undulating atmospheric light shafts)
+    const timeSec = performance.now() * 0.001;
+    for (let r = 0; r < 5; r++) {
+      const angleSpread = ((r - 2) / 2) * 0.36;
+      const rayBottomX = originX + Math.sin(angleSpread) * coneHeight * 0.88;
+      const rayWidth = 38 + r * 14;
+      const pulse = 0.016 + Math.sin(timeSec * 1.1 + r * 1.4) * 0.007;
+
+      const rayGrad = ctx.createLinearGradient(originX, originY, rayBottomX, h);
+      rayGrad.addColorStop(0, `rgba(255, 255, 250, ${pulse * 2.2})`);
+      rayGrad.addColorStop(0.2, `rgba(216, 255, 62, ${pulse * 1.2})`);
+      rayGrad.addColorStop(0.7, "transparent");
 
       ctx.beginPath();
-      ctx.fillStyle = p.c;
-      ctx.arc(p.x, p.y, p.r, 0, 6.283);
+      ctx.moveTo(originX - 12 + r * 6, originY);
+      ctx.lineTo(originX - 4 + r * 6, originY);
+      ctx.lineTo(rayBottomX + rayWidth, h);
+      ctx.lineTo(rayBottomX - rayWidth, h);
+      ctx.closePath();
+      ctx.fillStyle = rayGrad;
       ctx.fill();
     }
 
-    ctx.beginPath();
-    ctx.strokeStyle = "rgba(237,237,232,0.045)";
+    // 2. Downward Photon Particle Stream
     for (let i = 0; i < parts.length; i++) {
-      const a = parts[i];
-      for (let j = i + 1; j < parts.length; j++) {
-        const b = parts[j];
-        const dx = a.x - b.x, dy = a.y - b.y;
-        if (dx * dx + dy * dy < LINK2) {
-          ctx.moveTo(a.x, a.y);
-          ctx.lineTo(b.x, b.y);
-        }
+      const p = parts[i];
+
+      // Downward velocity step
+      p.y += p.vy;
+
+      // Optical conical dispersion boundary calculation
+      const progressY = Math.max(0, Math.min(1, (p.y - originY) / coneHeight));
+      const currentHalfW = topHalfWidth + progressY * (bottomHalfWidth - topHalfWidth);
+      const idealX = originX + p.ratio * currentHalfW;
+
+      // Organic lateral drift with micro wave oscillation
+      p.wavePhase += p.waveFreq;
+      p.x += (idealX - p.x) * 0.045 + Math.sin(p.wavePhase) * p.waveAmp;
+
+      // Interactive cursor deflection (particles deflect around cursor)
+      const mdx = p.x - mouse.x;
+      const mdy = p.y - mouse.y;
+      const md2 = mdx * mdx + mdy * mdy;
+      if (md2 < 7225 && md2 > 1) { // 85px radius
+        const md = Math.sqrt(md2);
+        const push = (1 - md / 85) * 4.6;
+        p.x += (mdx / md) * push;
+        p.y += (mdy / md) * push * 0.35;
       }
+
+      // Recycle photon when exiting the bottom or screen bounds
+      if (p.y > h + 24 || p.x < -30 || p.x > w + 30) {
+        p.y = originY + Math.random() * 8;
+        let r = (Math.random() - 0.5) * 2;
+        p.ratio = Math.sign(r) * Math.pow(Math.abs(r), 1.25);
+        p.x = originX + p.ratio * (topHalfWidth * 0.85);
+        p.fadeIn = 0;
+        continue;
+      }
+
+      // Fade in freshly born photons
+      if (p.fadeIn < 1) p.fadeIn += 0.045;
+
+      // Realistic inverse-exponential optical falloff down to the bottom
+      const falloff = Math.pow(1 - progressY * 0.82, 1.35);
+      const alpha = Math.max(0, Math.min(1, p.baseAlpha * falloff * p.fadeIn));
+      if (alpha <= 0.01) continue;
+
+      // Motion streak (directional speed streak)
+      const streakLen = Math.min(14, p.vy * 2.2);
+      ctx.beginPath();
+      ctx.strokeStyle = p.colorPrefix + (alpha * 0.72) + ")";
+      ctx.lineWidth = p.size;
+      ctx.lineCap = "round";
+      ctx.moveTo(p.x, Math.max(originY, p.y - streakLen));
+      ctx.lineTo(p.x, p.y);
+      ctx.stroke();
+
+      // Core luminous photon head
+      ctx.beginPath();
+      ctx.fillStyle = p.corePrefix + alpha + ")";
+      ctx.arc(p.x, p.y, p.size * 0.85, 0, 6.283);
+      ctx.fill();
     }
-    ctx.stroke();
 
     rafId = requestAnimationFrame(tick);
   }
@@ -2034,6 +2154,8 @@ async function triggerSaveAs(url, filename) {
       document.documentElement.classList.remove("lamp-off");
       document.body.classList.remove("lamp-off");
       document.body.classList.add("lamp-on");
+      window.triggerPhotonIgnition?.();
+      window.updateBeamGeometry?.();
     }
 
     // Populate URL input
@@ -2187,12 +2309,42 @@ async function triggerSaveAs(url, filename) {
         document.documentElement.classList.remove("lamp-off");
         document.body.classList.remove("lamp-off");
         document.body.classList.add("lamp-on");
+        window.triggerPhotonIgnition?.();
+        updateBeamGeometry();
       } else {
         document.body.classList.remove("lamp-on");
         document.documentElement.classList.add("lamp-off");
         document.body.classList.add("lamp-off");
+        updateBeamGeometry();
       }
     }
+
+    function updateBeamGeometry() {
+      const cone = document.getElementById("lampBeamCone");
+      const pool = document.getElementById("lampAmbientPool");
+      const workspace = document.getElementById("mainAppWorkspace");
+      if (!cone || !workspace) return;
+      if (!document.body.classList.contains("lamp-on")) {
+        cone.style.height = "";
+        if (pool) pool.style.height = "";
+        return;
+      }
+      const targetH = Math.max(window.innerHeight, workspace.offsetHeight + 180);
+      cone.style.height = `${targetH}px`;
+      if (pool) pool.style.height = `${targetH}px`;
+    }
+    window.updateBeamGeometry = updateBeamGeometry;
+
+    if (window.ResizeObserver) {
+      const ro = new ResizeObserver(() => {
+        if (document.body.classList.contains("lamp-on")) {
+          updateBeamGeometry();
+        }
+      });
+      const ws = document.getElementById("mainAppWorkspace");
+      if (ws) ro.observe(ws);
+    }
+    window.addEventListener("resize", updateBeamGeometry, { passive: true });
 
     // Default startup state: Direct Lamp Interface, Scroll Locked (Lamp OFF)
     document.documentElement.classList.add("lamp-off");
