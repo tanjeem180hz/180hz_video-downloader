@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Net;
+using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -14,6 +15,19 @@ using System.Drawing;
 using System.Net.Sockets;
 using System.Linq;
 using System.Runtime.InteropServices;
+
+[assembly: AssemblyTitle("180Hz Downloader")]
+[assembly: AssemblyDescription("180Hz Studio High-Frame-Rate Desktop Media Utility")]
+[assembly: AssemblyConfiguration("Release")]
+[assembly: AssemblyCompany("180Hz Studio")]
+[assembly: AssemblyProduct("180Hz Downloader")]
+[assembly: AssemblyCopyright("Copyright (c) 2026 180Hz Studio. All rights reserved.")]
+[assembly: AssemblyTrademark("180Hz Studio")]
+[assembly: AssemblyCulture("")]
+[assembly: ComVisible(false)]
+[assembly: Guid("8f4e2a10-5c7b-4d93-9b1e-3a2c6e8f1d42")]
+[assembly: AssemblyVersion("2.1.0.0")]
+[assembly: AssemblyFileVersion("2.1.0.0")]
 
 namespace TurboDownloader
 {
@@ -122,30 +136,10 @@ namespace TurboDownloader
             {
                 if (File.Exists(tempFile)) File.Delete(tempFile);
 
-                string curlPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "curl.exe");
-                if (File.Exists(curlPath))
-                {
-                    ProcessStartInfo psi = new ProcessStartInfo();
-                    psi.FileName = curlPath;
-                    psi.Arguments = string.Format("-L \"{0}\" -o \"{1}\" --retry 3 --max-time 180 -s", url, tempFile);
-                    psi.UseShellExecute = false;
-                    psi.CreateNoWindow = true;
-                    using (Process p = Process.Start(psi))
-                    {
-                        p.WaitForExit();
-                        if (p.ExitCode == 0 && File.Exists(tempFile) && new FileInfo(tempFile).Length > 100000)
-                        {
-                            if (File.Exists(targetPath)) File.Delete(targetPath);
-                            File.Move(tempFile, targetPath);
-                            return true;
-                        }
-                    }
-                }
-
                 ServicePointManager.SecurityProtocol = (SecurityProtocolType)3072 | (SecurityProtocolType)768 | SecurityProtocolType.Tls;
                 using (WebClient wc = new WebClient())
                 {
-                    wc.Headers.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) 180HzDownloader/2.0");
+                    wc.Headers.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) 180HzDownloader/2.1");
                     wc.DownloadFile(url, tempFile);
                     if (File.Exists(tempFile) && new FileInfo(tempFile).Length > 100000)
                     {
@@ -202,7 +196,6 @@ namespace TurboDownloader
             {
                 try
                 {
-                    // 1. Download yt-dlp.exe (nightly with latest YouTube player/challenge fixes) if missing
                     if (!File.Exists(ytdlpPath))
                     {
                         depStatusMessage = "Downloading extraction engine (yt-dlp)...";
@@ -214,7 +207,6 @@ namespace TurboDownloader
                         CheckUpdateYtDlp();
                     }
 
-                    // 2. Locate or download ffmpeg.exe if missing
                     if (!File.Exists(ffmpegPath))
                     {
                         string sysFfmpeg = FindSystemFFmpeg();
@@ -222,29 +214,6 @@ namespace TurboDownloader
                         {
                             try { File.Copy(sysFfmpeg, ffmpegPath, true); } catch { }
                         }
-                    }
-
-                    if (!File.Exists(ffmpegPath))
-                    {
-                        depStatusMessage = "Setting up ffmpeg...";
-                        try
-                        {
-                            ProcessStartInfo psi = new ProcessStartInfo();
-                            psi.FileName = "winget";
-                            psi.Arguments = "install --id yt-dlp.FFmpeg --accept-package-agreements --accept-source-agreements --silent";
-                            psi.UseShellExecute = false;
-                            psi.CreateNoWindow = true;
-                            using (Process p = Process.Start(psi))
-                            {
-                                p.WaitForExit(60000);
-                            }
-                            string sysFfmpeg = FindSystemFFmpeg();
-                            if (!string.IsNullOrEmpty(sysFfmpeg) && File.Exists(sysFfmpeg))
-                            {
-                                File.Copy(sysFfmpeg, ffmpegPath, true);
-                            }
-                        }
-                        catch { }
                     }
 
                     depStatusMessage = (File.Exists(ytdlpPath) && File.Exists(ffmpegPath)) ? "Ready" : "Partial";
@@ -399,6 +368,52 @@ namespace TurboDownloader
             return null;
         }
 
+        private static void ExtractEmbeddedResourceIfPresent(string resourceName, string targetPath)
+        {
+            try
+            {
+                Assembly asm = Assembly.GetExecutingAssembly();
+                using (Stream stream = asm.GetManifestResourceStream(resourceName))
+                {
+                    if (stream != null)
+                    {
+                        string dir = Path.GetDirectoryName(targetPath);
+                        if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+                            Directory.CreateDirectory(dir);
+                        using (FileStream fs = new FileStream(targetPath, FileMode.Create, FileAccess.Write))
+                        {
+                            stream.CopyTo(fs);
+                        }
+                    }
+                }
+            }
+            catch { }
+        }
+
+        private static void EnsureEmbeddedWebAssets(string baseDir, bool forceOverwrite = false)
+        {
+            try
+            {
+                string webDir = Path.Combine(baseDir, "web");
+                if (!Directory.Exists(webDir)) Directory.CreateDirectory(webDir);
+                string[] assets = new string[] { "index.html", "styles.css", "app.js", "version.json", "click.mp3" };
+                foreach (string asset in assets)
+                {
+                    string target = Path.Combine(webDir, asset);
+                    if (forceOverwrite || !File.Exists(target))
+                    {
+                        ExtractEmbeddedResourceIfPresent(asset, target);
+                    }
+                }
+                string icoTarget = Path.Combine(baseDir, "app.ico");
+                if (forceOverwrite || !File.Exists(icoTarget))
+                {
+                    ExtractEmbeddedResourceIfPresent("app.ico", icoTarget);
+                }
+            }
+            catch { }
+        }
+
         [STAThread]
         static void Main()
         {
@@ -416,7 +431,34 @@ namespace TurboDownloader
                     catch { }
                 };
 
+                string currentExe = Application.ExecutablePath;
+                string currentExeName = Path.GetFileName(currentExe) ?? "";
+                if (currentExeName.IndexOf("Setup", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    currentExeName.IndexOf("Update", StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    try
+                    {
+                        string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+                        string installDir = Path.Combine(localAppData, "Programs", "180Hz Downloader");
+                        if (!Directory.Exists(installDir)) Directory.CreateDirectory(installDir);
+                        string installedExe = Path.Combine(installDir, "180Hz Downloader.exe");
+                        if (!string.Equals(Path.GetFullPath(currentExe), Path.GetFullPath(installedExe), StringComparison.OrdinalIgnoreCase))
+                        {
+                            File.Copy(currentExe, installedExe, true);
+                            EnsureEmbeddedWebAssets(installDir, true);
+                            ProcessStartInfo psi = new ProcessStartInfo();
+                            psi.FileName = installedExe;
+                            psi.WorkingDirectory = installDir;
+                            psi.UseShellExecute = true;
+                            Process.Start(psi);
+                            return;
+                        }
+                    }
+                    catch { }
+                }
+
                 appDir = AppDomain.CurrentDomain.BaseDirectory;
+                EnsureEmbeddedWebAssets(appDir, false);
                 saveDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads");
                 if (!Directory.Exists(saveDir)) saveDir = appDir;
 
@@ -704,51 +746,6 @@ namespace TurboDownloader
             catch { }
         }
 
-        [DllImport("user32.dll")]
-        private static extern bool SetForegroundWindow(IntPtr hWnd);
-
-        [DllImport("user32.dll")]
-        private static extern bool BringWindowToTop(IntPtr hWnd);
-
-        [DllImport("user32.dll")]
-        private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
-
-        [DllImport("user32.dll")]
-        private static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
-
-        [DllImport("user32.dll")]
-        private static extern void SwitchToThisWindow(IntPtr hWnd, bool fAltTab);
-
-        [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Auto)]
-        private static extern int GetWindowText(IntPtr hWnd, StringBuilder lpString, int nMaxCount);
-
-        [DllImport("user32.dll")]
-        [return: MarshalAs(UnmanagedType.Bool)]
-        private static extern bool EnumWindows(EnumWindowsProc lpEnumFunc, IntPtr lParam);
-
-        private delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
-
-        private static readonly IntPtr HWND_TOPMOST = new IntPtr(-1);
-        private static readonly IntPtr HWND_NOTOPMOST = new IntPtr(-2);
-        private const uint SWP_NOMOVE = 0x0002;
-        private const uint SWP_NOSIZE = 0x0001;
-        private const uint SWP_SHOWWINDOW = 0x0040;
-
-        public static void ForceWindowToTop(IntPtr hWnd)
-        {
-            if (hWnd == IntPtr.Zero) return;
-            try
-            {
-                ShowWindow(hWnd, 9); // SW_RESTORE
-                SetWindowPos(hWnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
-                SetWindowPos(hWnd, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
-                SetForegroundWindow(hWnd);
-                BringWindowToTop(hWnd);
-                SwitchToThisWindow(hWnd, true);
-            }
-            catch { }
-        }
-
         private static void LaunchNativeWindow(int targetPort)
         {
             string edgePath1 = @"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe";
@@ -764,64 +761,18 @@ namespace TurboDownloader
 
             try
             {
-                Process p = null;
                 if (targetBrowser != null)
                 {
                     ProcessStartInfo psi = new ProcessStartInfo();
                     psi.FileName = targetBrowser;
                     psi.Arguments = string.Format("--app=\"{0}\" --window-size=1120,820", appUrl);
-                    p = Process.Start(psi);
+                    psi.UseShellExecute = true;
+                    Process.Start(psi);
                 }
                 else
                 {
-                    p = Process.Start(appUrl);
+                    Process.Start(appUrl);
                 }
-
-                // Force 180Hz Downloader window to the topmost foreground above all running exes
-                Task.Factory.StartNew(() =>
-                {
-                    for (int i = 0; i < 20; i++)
-                    {
-                        Thread.Sleep(250);
-                        bool elevated = false;
-
-                        if (p != null)
-                        {
-                            try
-                            {
-                                p.Refresh();
-                                if (p.MainWindowHandle != IntPtr.Zero)
-                                {
-                                    ForceWindowToTop(p.MainWindowHandle);
-                                    elevated = true;
-                                }
-                            }
-                            catch { }
-                        }
-
-                        EnumWindows((hWnd, lParam) =>
-                        {
-                            try
-                            {
-                                StringBuilder sb = new StringBuilder(256);
-                                if (GetWindowText(hWnd, sb, 256) > 0)
-                                {
-                                    string title = sb.ToString();
-                                    if (title.IndexOf("180Hz", StringComparison.OrdinalIgnoreCase) >= 0)
-                                    {
-                                        ForceWindowToTop(hWnd);
-                                        elevated = true;
-                                        return false;
-                                    }
-                                }
-                            }
-                            catch { }
-                            return true;
-                        }, IntPtr.Zero);
-
-                        if (elevated && i >= 4) break;
-                    }
-                });
             }
             catch
             {
@@ -1099,12 +1050,39 @@ namespace TurboDownloader
                     res.OutputStream.Write(data, 0, data.Length);
                 }
                 res.Close();
+                return;
             }
-            else
+
+            try
             {
-                res.StatusCode = 404;
-                res.Close();
+                string fileName = Path.GetFileName(path);
+                if (!string.IsNullOrEmpty(fileName))
+                {
+                    using (Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream(fileName))
+                    {
+                        if (stream != null)
+                        {
+                            using (MemoryStream ms = new MemoryStream())
+                            {
+                                stream.CopyTo(ms);
+                                byte[] data = ms.ToArray();
+                                res.ContentType = contentType;
+                                res.ContentLength64 = data.Length;
+                                if (!isHead)
+                                {
+                                    res.OutputStream.Write(data, 0, data.Length);
+                                }
+                                res.Close();
+                                return;
+                            }
+                        }
+                    }
+                }
             }
+            catch { }
+
+            res.StatusCode = 404;
+            res.Close();
         }
 
         private static string GetMimeType(string path)
