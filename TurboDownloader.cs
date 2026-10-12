@@ -706,7 +706,7 @@ namespace TurboDownloader
                 {
                     SendJson(res, new {
                         success = true,
-                        engine = "180Hz Downloader 2.0 (PEAK/8K Engine)",
+                        engine = "180Hz Downloader 2.0",
                         status = depStatusMessage,
                         isReady = File.Exists(ytdlpPath) && File.Exists(ffmpegPath),
                         isUpdating = isUpdatingYtDlp,

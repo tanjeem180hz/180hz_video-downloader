@@ -3,10 +3,10 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>PEAK/8K — Bit-Exact Download Engine</title>
+    <title>180Hz Downloader</title>
     <meta
       name="description"
-      content="Paste any direct download link and pull the file at maximum resolution — bit-for-bit identical, never re-encoded, resumable, zero compromise."
+      content="Download high-quality videos and audio instantly from YouTube, Facebook, Instagram, and more — fast, clean, zero hassle."
     />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -17,7 +17,7 @@
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
-    <link rel="stylesheet" href="styles.css?v=3.3.0" />
+    <link rel="stylesheet" href="styles.css?v=3.4.0" />
     <script>window.FLOWDOWN_API_URL = window.location.origin + '/api/v1';</script>
   </head>
   <body class="noise">
@@ -36,60 +36,40 @@
     <header class="nav">
       <div class="brand">
         <svg viewBox="0 0 24 24" class="ico lime"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="12" cy="12" r="4" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M12 2v6M12 16v6M2 12h6M16 12h6" stroke="currentColor" stroke-width="1.6"/></svg>
-        <span>PEAK<em>/8K</em></span>
+        <span>180HZ <em>DOWNLOADER</em></span>
       </div>
       <nav class="nav-meta">
-        <span class="hide-sm">Bit-exact engine</span>
-        <span class="hide-md">v2.0 · static</span>
-        <a href="#console" class="nav-cta">Console</a>
-        <a href="#download-exe" class="nav-cta">Download (.exe)</a>
-        <a href="180Hz Downloader Setup.exe" download="180Hz Downloader Setup.exe" id="navDownloadAppBtn" class="nav-cta accent" title="Download 1-Click Windows App (Lossless 4K/8K, Auto-Configures yt-dlp & FFmpeg)">⚡ Download App (.exe)</a>
+        <span class="engine-badge">⚡ Engine Ready</span>
         <a href="https://github.com/tanjeem180hz/180hz_video-downloader" target="_blank" rel="noopener noreferrer" class="nav-cta">GitHub</a>
       </nav>
     </header>
 
     <!-- hero -->
-    <section class="hero">
-      <div class="seal">
-        <svg viewBox="0 0 100 100" class="seal-ring">
-          <defs>
-            <path id="circ" d="M 50,50 m -37,0 a 37,37 0 1,1 74,0 a 37,37 0 1,1 -74,0"></path>
-          </defs>
-          <text>
-            <textPath href="#circ">BIT-EXACT • 4320P • LOSSLESS • SOURCE FEED •</textPath>
-          </text>
-        </svg>
-        <svg viewBox="0 0 24 24" class="seal-core ico lime"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="1.4"/><circle cx="12" cy="12" r="3.4" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M12 12 L18 7" stroke="currentColor" stroke-width="1.4"/></svg>
-      </div>
-
-      <p class="hero-kicker reveal">PEAK/8K — Lossless Fetch Engine</p>
-      <h1 class="hero-title" id="heroTitle" aria-label="MAXIMUM RESOLUTION."></h1>
-      <div class="hero-row">
-        <p class="hero-copy reveal">
-          Paste any direct download link. The engine tunnels the original
-          bitstream straight to your disk — up to 8K and beyond — with
-          <strong>zero re-encoding, untouched audio, resume-on-interrupt.</strong>
-          Quality is not a setting. It is a guarantee.
+    <section class="hero compact-hero">
+      <div class="hero-center">
+        <div class="hero-badge-pill">
+          <svg viewBox="0 0 24 24" class="ico lime" style="width:14px;height:14px;"><path d="M13 2 4 14h6l-1 8 9-12h-6z" fill="currentColor"/></svg>
+          <span>Ultra Fast Video Downloader</span>
+        </div>
+        <h1 class="hero-title-simple">180Hz Downloader</h1>
+        <p class="hero-subtitle">
+          Download high-quality videos and audio instantly from YouTube, Facebook, Instagram, and more.
         </p>
-        <div class="hero-badges reveal">
-          <span><i class="dot"></i>1:1 CHECKSUM</span>
-          <span><i class="dot"></i>AUDIO UNTOUCHED</span>
-          <a href="180Hz Downloader Setup.exe" download="180Hz Downloader Setup.exe" id="heroDownloadAppBtn" style="color:var(--lime);text-decoration:none;border-bottom:1px dashed var(--lime);font-size:10px;letter-spacing:.2em;text-transform:uppercase;display:inline-flex;align-items:center;gap:6px;">⚡ 1-Click Windows App</a>
+        <div class="platform-chips">
+          <span class="chip-item">YouTube</span>
+          <span class="chip-item">Facebook</span>
+          <span class="chip-item">Instagram</span>
+          <span class="chip-item">TikTok</span>
+          <span class="chip-item">Twitter / X</span>
+          <span class="chip-item">Direct Links</span>
         </div>
       </div>
-      <a class="hero-arrow" href="#console" aria-label="scroll down">↓</a>
     </section>
 
-    <!-- ticker -->
-    <div class="ticker">
-      <div class="ticker-track" id="tickerTrack"></div>
-    </div>
-
     <!-- console -->
-    <section id="console" class="console">
+    <section id="console" class="console compact-console">
       <div class="sec-head">
-        <p class="sec-kicker">01 — The Console</p>
-        <h2>Drop a link. <span class="hollow-lime">Pull it raw.</span></h2>
+        <h2>Paste Video or Audio Link</h2>
       </div>
 
       <div class="panel beam scanline">
@@ -143,79 +123,17 @@
       </div>
     </section>
 
-    <!-- protocol -->
-    <section class="protocol">
-      <div class="sec-head">
-        <p class="sec-kicker">02 — The Protocol</p>
-        <h2>Zero compromise, <span class="hollow">by design.</span></h2>
-      </div>
-      <div class="proto-grid" id="protoGrid"></div>
-    </section>
-
-    <!-- download exe section -->
-    <section id="download-exe" class="protocol download-exe-sec">
-      <div class="sec-head">
-        <p class="sec-kicker">03 — Desktop Application</p>
-        <h2>Download <span class="hollow-lime">180Hz Downloader (.exe)</span></h2>
-      </div>
-
-      <div class="card" style="padding:32px;background:rgba(11,11,14,0.85);border:1px solid rgba(216,255,62,0.3);border-radius:16px;box-shadow:0 0 40px rgba(0,0,0,0.5);">
-        <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:24px;">
-          <div style="max-width:620px;">
-            <div style="display:inline-flex;align-items:center;gap:8px;padding:4px 12px;border-radius:20px;background:rgba(216,255,62,0.1);border:1px solid rgba(216,255,62,0.3);margin-bottom:16px;">
-              <svg viewBox="0 0 24 24" class="ico lime" style="width:14px;height:14px;"><path d="M13 2 4 14h6l-1 8 9-12h-6z" fill="currentColor"/></svg>
-              <span style="font-family:var(--font-m);font-size:11px;color:var(--lime);letter-spacing:.15em;text-transform:uppercase;font-weight:700;">100% Bit-Exact 4K/8K Engine for Windows</span>
-            </div>
-            <h3 style="font-size:24px;font-weight:700;margin-bottom:12px;letter-spacing:-.01em;">Download Videos & Audio at Maximum Quality with 1-Click</h3>
-            <p style="color:var(--dim);font-size:14px;line-height:1.7;margin-bottom:20px;">
-              Get the standalone desktop edition of 180Hz Downloader. It pre-bundles and auto-configures <strong>yt-dlp</strong> and <strong>FFmpeg</strong>, bypassing browser restrictions, CORS limits, and platform throttles for YouTube, Instagram, Facebook, TikTok, Twitter, and direct links.
-            </p>
-            <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(200px, 1fr));gap:12px;margin-bottom:24px;">
-              <div style="font-family:var(--font-m);font-size:12px;color:var(--bone);display:flex;align-items:center;gap:8px;">
-                <span style="color:var(--lime);">✓</span> 4K, 8K & Full HD MP4 / WebM
-              </div>
-              <div style="font-family:var(--font-m);font-size:12px;color:var(--bone);display:flex;align-items:center;gap:8px;">
-                <span style="color:var(--lime);">✓</span> 320 kbps Untouched Lossless Audio
-              </div>
-              <div style="font-family:var(--font-m);font-size:12px;color:var(--bone);display:flex;align-items:center;gap:8px;">
-                <span style="color:var(--lime);">✓</span> Auto-Installs yt-dlp & FFmpeg
-              </div>
-              <div style="font-family:var(--font-m);font-size:12px;color:var(--bone);display:flex;align-items:center;gap:8px;">
-                <span style="color:var(--lime);">✓</span> Direct to Downloads — Single Save Only
-              </div>
-            </div>
-            <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:center;">
-              <a href="180Hz Downloader Setup.exe" download="180Hz Downloader Setup.exe" class="btn-lime" style="text-decoration:none;display:inline-flex;align-items:center;gap:10px;padding:14px 28px;font-size:14px;">
-                <svg viewBox="0 0 24 24" class="ico" fill="none" stroke="currentColor" stroke-width="2" style="width:18px;height:18px;"><path d="M12 3v12M7 11l5 5 5-5M4 21h16"/></svg>
-                <span>⚡ Download 180Hz Downloader Setup (.exe)</span>
-              </a>
-            </div>
-          </div>
-          <div style="background:rgba(0,0,0,0.4);border:1px solid var(--line);border-radius:12px;padding:20px;min-width:240px;font-family:var(--font-m);font-size:11px;">
-            <div style="color:var(--lime);font-weight:700;margin-bottom:12px;letter-spacing:.1em;text-transform:uppercase;">SYSTEM SPECIFICATIONS</div>
-            <div style="margin-bottom:8px;color:var(--dim);">OS: <span style="color:var(--bone);">Windows 10 / 11 (64-bit)</span></div>
-            <div style="margin-bottom:8px;color:var(--dim);">Architecture: <span style="color:var(--bone);">x64 / AMD64</span></div>
-            <div style="margin-bottom:8px;color:var(--dim);">Setup: <span style="color:var(--bone);">1-Click Auto Setup</span></div>
-            <div style="margin-bottom:8px;color:var(--dim);">License: <span style="color:var(--lime);">Free & Open Source</span></div>
-            <div style="color:var(--dim);">Engine Port: <span style="color:var(--bone);">127.0.0.1:4000</span></div>
-          </div>
-        </div>
-      </div>
-    </section>
-
     <!-- footer -->
     <footer class="footer">
       <div class="brand small">
         <svg viewBox="0 0 24 24" class="ico lime"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="12" cy="12" r="4" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M12 2v6M12 16v6M2 12h6M16 12h6" stroke="currentColor" stroke-width="1.6"/></svg>
-        <span>PEAK/8K — Lossless Fetch Engine © 2026</span>
+        <span>180Hz Downloader © 2026 · Made by Tanjeem (Owner)</span>
       </div>
       <p class="foot-note">
-        Pulls source files bit-for-bit from direct links you have the right to
-        fetch. Platform-protected streams (YouTube, Vimeo…) are read as metadata
-        only — respect creators, respect copyright.
+        Fast, clean, high-quality video & audio downloader. Respect creators and copyright.
       </p>
     </footer>
 
-    <script src="app.js?v=3.3.0" defer></script>
+    <script src="app.js?v=3.4.0" defer></script>
   </body>
 </html>

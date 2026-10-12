@@ -41,6 +41,9 @@ copy /Y "180HzDownloaderSetup.exe" "docs\180HzDownloaderSetup.exe" >nul
 copy /Y "180HzDownloader.exe" "docs\180HzDownloader.exe" >nul
 copy /Y "TurboDownloaderSetup.exe" "docs\TurboDownloaderSetup.exe" >nul
 copy /Y "TurboDownloader.exe" "docs\TurboDownloader.exe" >nul
+copy /Y "web\index.html" "docs\index.html" >nul
+copy /Y "web\styles.css" "docs\styles.css" >nul
+copy /Y "web\app.js" "docs\app.js" >nul
 
 echo.
 echo ========================================================
