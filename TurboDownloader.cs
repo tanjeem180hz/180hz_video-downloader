@@ -1405,39 +1405,8 @@ namespace TurboDownloader
                 return;
             }
 
-            bool force = reqObj.ContainsKey("force") && Convert.ToBoolean(reqObj["force"]);
             bool isAudioReq = audioOnly || container == "mp3" || (formatId ?? "").StartsWith("mp3") || (formatId ?? "") == "bestaudio";
             string effectiveContainer = isAudioReq ? "mp3" : container;
-
-            if (!force)
-            {
-                foreach (var kvp in jobs)
-                {
-                    if (kvp.Value.url == url && kvp.Value.status == "COMPLETED" &&
-                        !string.IsNullOrEmpty(kvp.Value.filePath) && File.Exists(kvp.Value.filePath))
-                    {
-                        bool jobIsAudio = kvp.Value.audioOnly || kvp.Value.requestedFormat == "mp3" || (kvp.Value.formatId ?? "").StartsWith("mp3");
-                        if (jobIsAudio == isAudioReq &&
-                            (string.Equals(kvp.Value.requestedFormat, effectiveContainer, StringComparison.OrdinalIgnoreCase) ||
-                             string.Equals(kvp.Value.formatId, formatId, StringComparison.OrdinalIgnoreCase)))
-                        {
-                            SendJson(res, new {
-                                success = true,
-                                alreadyCompleted = true,
-                                data = new {
-                                    id = kvp.Key,
-                                    title = kvp.Value.title,
-                                    filePath = kvp.Value.filePath,
-                                    fileSizeBytes = kvp.Value.fileSizeBytes,
-                                    requestedFormat = kvp.Value.requestedFormat,
-                                    downloadUrl = kvp.Value.downloadUrl
-                                }
-                            });
-                            return;
-                        }
-                    }
-                }
-            }
 
             string jobId = "job_" + Guid.NewGuid().ToString("N").Substring(0, 8);
 
@@ -1623,7 +1592,7 @@ namespace TurboDownloader
 
             string faststartArg = !isAudio ? "--postprocessor-args \"ffmpeg:-movflags faststart\"" : "";
 
-            string args = string.Format("{0} {1} {2} {3} {4} {5} --ffmpeg-location \"{6}\" --newline --no-playlist --no-mtime --windows-filenames -o \"{7}\" \"{8}\"",
+            string args = string.Format("{0} {1} {2} {3} {4} {5} --ffmpeg-location \"{6}\" --force-overwrites --newline --no-playlist --no-mtime --windows-filenames -o \"{7}\" \"{8}\"",
                 jsRuntimeArg, extArgs, cookiesArg, formatArg, mergeArg, faststartArg, ffmpeg, outTemplate, safeUrl);
 
             job.status = "DOWNLOADING";
@@ -1716,6 +1685,46 @@ namespace TurboDownloader
                 else
                 {
                     string err = errSb.ToString();
+
+                    // If file is locked by Windows (e.g. playing in media player), auto-retry with timestamped suffix
+                    if (err.IndexOf("Permission denied", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                        err.IndexOf("used by another process", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                        err.IndexOf("Errno 13", StringComparison.OrdinalIgnoreCase) >= 0)
+                    {
+                        try
+                        {
+                            string fallbackTemplate = Path.Combine(saveDir, "%(title)s (" + DateTime.Now.ToString("yyyyMMdd_HHmmss") + ").%(ext)s");
+                            string retryArgs = string.Format("{0} {1} {2} {3} {4} {5} --ffmpeg-location \"{6}\" --force-overwrites --newline --no-playlist --no-mtime --windows-filenames -o \"{7}\" \"{8}\"",
+                                jsRuntimeArg, extArgs, cookiesArg, formatArg, mergeArg, faststartArg, ffmpeg, fallbackTemplate, safeUrl);
+
+                            errSb.Clear();
+                            psi.Arguments = retryArgs;
+                            job.process = new Process();
+                            job.process.StartInfo = psi;
+                            job.process.ErrorDataReceived += (s, e) => { if (e.Data != null) errSb.AppendLine(e.Data); };
+                            job.process.Start();
+                            job.process.BeginErrorReadLine();
+                            string retryLine;
+                            while ((retryLine = job.process.StandardOutput.ReadLine()) != null)
+                            {
+                                ParseDownloadOutput(job, retryLine);
+                            }
+                            job.process.WaitForExit();
+
+                            if (job.process.ExitCode == 0)
+                            {
+                                job.status = "COMPLETED";
+                                job.progressPercent = 100;
+                                if (!string.IsNullOrEmpty(job.filePath) && File.Exists(job.filePath))
+                                {
+                                    job.fileSizeBytes = new FileInfo(job.filePath).Length;
+                                }
+                                return;
+                            }
+                        }
+                        catch { }
+                    }
+
                     job.status = "FAILED";
                     job.errorMessage = "Download error: " + (string.IsNullOrEmpty(err) ? "Process exited with code " + job.process.ExitCode : err);
                     job.errorCode = "EXIT_" + job.process.ExitCode;

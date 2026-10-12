@@ -1676,12 +1676,6 @@ async function triggerSaveAs(url, filename) {
     btn.addEventListener("click", () => {
       if (isDownloading) return;
       if (r.isLocalBackend || isDesktopEnvironment()) {
-        const cacheKey = `${r.url}_${(selectedFormat && selectedFormat.formatId) || 'best'}_${(selectedFormat && selectedFormat.container) || 'mp4'}_${Boolean(selectedFormat && selectedFormat.audioOnly)}`;
-        const existing = downloadedCache[cacheKey];
-        if (existing) {
-          showCompletedUi(existing, selectedFormat);
-          return;
-        }
         executeDownload(selectedFormat);
       } else {
         handleLaunchOrInstallDesktop(r.url);
@@ -1714,15 +1708,10 @@ async function triggerSaveAs(url, filename) {
       setTimeout(() => (msg.textContent = ""), 4000);
     });
 
-    async function executeDownload(fmt, force = false) {
+    async function executeDownload(fmt) {
       if (isDownloading) return;
 
       const cacheKey = `${r.url}_${(fmt && fmt.formatId) || 'best'}_${(fmt && fmt.container) || 'mp4'}_${Boolean(fmt && fmt.audioOnly)}`;
-      const existing = downloadedCache[cacheKey];
-      if (!force && existing) {
-        showCompletedUi(existing, fmt);
-        return;
-      }
 
       isDownloading = true;
       btn.disabled = true;
@@ -1739,7 +1728,7 @@ async function triggerSaveAs(url, filename) {
         container: fmt.container || (fmt.audioOnly ? "mp3" : "mp4"),
         quality: fmt.quality || fmt.resolution || "best",
         audioOnly: Boolean(fmt.audioOnly),
-        force: Boolean(force)
+        force: true
       };
 
       try {
@@ -1757,15 +1746,6 @@ async function triggerSaveAs(url, filename) {
         }
 
         const createData = await createRes.json();
-
-        // Backend reports existing completed file on disk!
-        if (createData.alreadyCompleted && createData.data) {
-          downloadedCache[cacheKey] = createData.data;
-          downloadedCache[r.url] = createData.data;
-          showCompletedUi(createData.data, fmt);
-          return;
-        }
-
         const job = createData.data;
         currentJobId = job.id;
 
