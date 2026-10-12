@@ -917,8 +917,12 @@ body {
   transition: background-color 0.8s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+html.lamp-off,
 body.lamp-off {
   background: #050608 !important;
+  overflow: hidden !important;
+  height: 100vh !important;
+  max-height: 100vh !important;
 }
 
 body.lamp-off .orb,
@@ -930,6 +934,7 @@ body.lamp-off #field {
 
 body.lamp-on {
   background: #08080c !important;
+  overflow-y: auto !important;
 }
 
 body.lamp-on .orb,
@@ -937,43 +942,6 @@ body.lamp-on .grid-overlay,
 body.lamp-on #field {
   opacity: 0.75;
   transition: opacity 0.8s ease;
-}
-
-/* Nav Lamp Toggle Pill */
-.lamp-toggle-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  background: rgba(255, 255, 255, 0.04);
-  cursor: pointer;
-  border-radius: 999px;
-  padding: 6px 14px;
-  font-size: 12px;
-  font-weight: 600;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  color: var(--bone);
-  transition: all 0.25s ease;
-}
-
-.lamp-toggle-pill:hover {
-  background: rgba(255, 255, 255, 0.09);
-  border-color: rgba(216, 255, 62, 0.4);
-  color: #fff;
-  transform: translateY(-1px);
-}
-
-.lamp-pill-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: #666;
-  transition: all 0.3s ease;
-}
-
-body.lamp-on .lamp-pill-dot {
-  background: var(--lime);
-  box-shadow: 0 0 8px var(--lime);
-  animation: pulse-soft 2s infinite ease-in-out;
 }
 
 /* Studio Lamp Stage Layout */
@@ -991,11 +959,14 @@ body.lamp-on .lamp-pill-dot {
               padding 0.85s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-/* STANDBY / POWER-OFF STATE (Direct Lamp Interface on Startup) */
+/* STANDBY / POWER-OFF STATE (Direct Lamp Interface on Startup - Zero Scroll) */
 body.lamp-off .studio-lamp-stage {
-  min-height: 75vh;
-  padding-top: 40px;
-  cursor: pointer;
+  height: calc(100vh - 65px);
+  min-height: calc(100vh - 65px);
+  justify-content: center;
+  padding-top: 0;
+  overflow: hidden;
+  cursor: default;
 }
 
 /* ACTIVE / ILLUMINATED STATE (Lamp in Background Overhead) */
@@ -1204,15 +1175,30 @@ body.lamp-on .lamp-standby-hint {
 .hint-pill {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 22px;
-  background: rgba(18, 19, 24, 0.85);
+  justify-content: center;
+  gap: 12px;
+  padding: 14px 32px;
+  background: rgba(18, 19, 24, 0.9);
   backdrop-filter: blur(16px);
-  border: 1px solid rgba(216, 255, 62, 0.35);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6), 0 0 18px rgba(216, 255, 62, 0.15);
+  border: 1.5px solid rgba(216, 255, 62, 0.45);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.7), 0 0 22px rgba(216, 255, 62, 0.2);
   border-radius: 999px;
-  animation: hintBreathe 2.8s infinite ease-in-out;
+  cursor: pointer;
+  outline: none;
+  animation: hintBreathe 2.6s infinite ease-in-out;
+  transition: all 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
   user-select: none;
+}
+
+.hint-pill:hover {
+  background: rgba(28, 30, 38, 0.98);
+  border-color: var(--lime);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.85), 0 0 32px rgba(216, 255, 62, 0.5);
+  transform: scale(1.05) translateY(-2px);
+}
+
+.hint-pill:active {
+  transform: scale(0.97) translateY(1px);
 }
 
 .hint-icon {
@@ -1241,21 +1227,29 @@ body.lamp-on .lamp-standby-hint {
   position: relative;
   z-index: 5;
   width: 100%;
-  transition: opacity 0.85s cubic-bezier(0.16, 1, 0.3, 1),
-              transform 0.85s cubic-bezier(0.16, 1, 0.3, 1),
-              filter 0.85s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 body.lamp-off .main-workspace {
-  opacity: 0;
-  pointer-events: none;
-  transform: translateY(45px);
-  filter: blur(5px);
+  display: none !important;
 }
 
 body.lamp-on .main-workspace {
+  display: block !important;
   opacity: 1;
   pointer-events: auto;
   transform: translateY(0);
-  filter: blur(0);
+  animation: workspaceDirectOpen 0.55s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes workspaceDirectOpen {
+  0% {
+    opacity: 0;
+    transform: translateY(24px);
+    filter: blur(4px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
 }

@@ -39,10 +39,6 @@
         <span>180<span class="nav-hz">Hz</span> <em>DOWNLOADER</em></span>
       </div>
       <nav class="nav-meta">
-        <button type="button" id="navLampToggleBtn" class="nav-cta lamp-toggle-pill" title="Toggle Studio Lamp">
-          <span class="lamp-pill-dot"></span>
-          <span id="navLampToggleLabel">💡 Lamp: ON</span>
-        </button>
         <a href="https://github.com/tanjeem180hz/180hz_video-downloader" target="_blank" rel="noopener noreferrer" class="nav-cta">GitHub</a>
       </nav>
     </header>
@@ -175,12 +171,12 @@
         </svg>
       </div>
 
-      <!-- Standby Callout / Hint (Only visible when lamp is off) -->
+      <!-- Standby Power Button (Only visible when lamp is off) -->
       <div class="lamp-standby-hint" id="lampStandbyHint">
-        <div class="hint-pill">
+        <button type="button" class="hint-pill" id="lampPowerBtn" title="Click to Power On Engine">
           <span class="hint-icon">⚡</span>
-          <span class="hint-text">CLICK LAMP OR PULL CORD TO POWER ON ENGINE</span>
-        </div>
+          <span class="hint-text">CLICK TO POWER ON ENGINE</span>
+        </button>
       </div>
     </div>
 

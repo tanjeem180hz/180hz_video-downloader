@@ -2050,7 +2050,7 @@ async function triggerSaveAs(url, filename) {
 
   /* ========================================================
      STUDIO LAMP THEME CONTROLLER
-     Direct Lamp Interface on Startup -> Click to Ignite -> Background illumination
+     Direct Lamp Interface on Startup -> Click Button to Open
      ======================================================== */
   (function initStudioLamp() {
     const lampStage = document.getElementById("lampStage");
@@ -2058,9 +2058,8 @@ async function triggerSaveAs(url, filename) {
 
     const pullChain = document.getElementById("lampPullChain");
     const lampHead = document.getElementById("lampClickableHead");
+    const lampPowerBtn = document.getElementById("lampPowerBtn");
     const standbyHint = document.getElementById("lampStandbyHint");
-    const navToggleBtn = document.getElementById("navLampToggleBtn");
-    const navToggleLabel = document.getElementById("navLampToggleLabel");
 
     let isLampLit = false;
 
@@ -2119,24 +2118,36 @@ async function triggerSaveAs(url, filename) {
       }
 
       if (on) {
+        document.documentElement.classList.remove("lamp-off");
         document.body.classList.remove("lamp-off");
         document.body.classList.add("lamp-on");
-        if (navToggleLabel) navToggleLabel.textContent = "💡 Lamp: ON";
-        if (navToggleBtn) navToggleBtn.classList.add("lamp-active");
       } else {
         document.body.classList.remove("lamp-on");
+        document.documentElement.classList.add("lamp-off");
         document.body.classList.add("lamp-off");
-        if (navToggleLabel) navToggleLabel.textContent = "💡 Lamp: OFF";
-        if (navToggleBtn) navToggleBtn.classList.remove("lamp-active");
       }
     }
 
-    // Default startup state: Direct Lamp Interface in standby mode (Lamp OFF)
+    // Default startup state: Direct Lamp Interface, Scroll Locked (Lamp OFF)
+    document.documentElement.classList.add("lamp-off");
     document.body.classList.add("lamp-off");
     document.body.classList.remove("lamp-on");
-    if (navToggleLabel) navToggleLabel.textContent = "💡 Lamp: OFF";
 
-    // Click handlers
+    // Click handlers for Direct Open
+    if (lampPowerBtn) {
+      lampPowerBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        setLampState(true, true);
+      });
+    }
+
+    if (standbyHint) {
+      standbyHint.addEventListener("click", (e) => {
+        e.stopPropagation();
+        setLampState(true, true);
+      });
+    }
+
     if (pullChain) {
       pullChain.addEventListener("click", (e) => {
         e.stopPropagation();
@@ -2147,28 +2158,6 @@ async function triggerSaveAs(url, filename) {
     if (lampHead) {
       lampHead.addEventListener("click", (e) => {
         e.stopPropagation();
-        setLampState(!isLampLit, true);
-      });
-    }
-
-    if (standbyHint) {
-      standbyHint.addEventListener("click", (e) => {
-        e.stopPropagation();
-        if (!isLampLit) setLampState(true, true);
-      });
-    }
-
-    if (lampStage) {
-      lampStage.addEventListener("click", (e) => {
-        if (!isLampLit) {
-          setLampState(true, true);
-        }
-      });
-    }
-
-    if (navToggleBtn) {
-      navToggleBtn.addEventListener("click", (e) => {
-        e.preventDefault();
         setLampState(!isLampLit, true);
       });
     }
