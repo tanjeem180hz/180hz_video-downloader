@@ -500,19 +500,19 @@ async function triggerSaveAs(url, filename) {
     const rawUrl = opts.url || (input && input.value ? input.value.trim() : "");
     const showAppDownload = opts.showAppDownload !== false;
 
-    // Friendly Bengali & contextual explanation
-    let bengaliExplanation = "";
+    // Contextual English explanation
+    let detailedExplanation = "";
     const lower = cause.toLowerCase();
     if (lower.includes("login") || lower.includes("cookie") || lower.includes("bot") || lower.includes("empty media response") || lower.includes("restricted")) {
-      bengaliExplanation = "এই পোস্ট বা ভিডিওটি দেখতে প্ল্যাটফর্মের বিশেষ সিকিউরিটি ভেরিফিকেশন, বয়স সীমা অথবা লগইন অ্যাকাউন্ট প্রয়োজন।";
+      detailedExplanation = "This video or audio requires platform authentication, age verification, or is restricted by host security.";
     } else if (lower.includes("private") || lower.includes("unavailable") || lower.includes("deleted") || lower.includes("not found") || lower.includes("404")) {
-      bengaliExplanation = "মিডিয়া ফাইলটি প্রাইভেট করা হয়েছে, ডিলিট হয়েছে অথবা হোস্ট প্ল্যাটফর্ম থেকে সরিয়ে নেওয়া হয়েছে।";
+      detailedExplanation = "The media file is private, deleted, or has been removed from the host platform.";
     } else if (lower.includes("connect") || lower.includes("failed to fetch") || lower.includes("networkerror") || lower.includes("local engine") || lower.includes("4000")) {
-      bengaliExplanation = "ডেস্কটপ ইঞ্জিন (Port 4000) এ কানেক্ট করা যাচ্ছে না অথবা ব্রাউজার লেভেলে রিকোয়েস্ট ব্লক হয়েছে।";
+      detailedExplanation = "Cannot connect to the 180Hz Engine or the connection was blocked by browser network rules.";
     } else if (lower.includes("valid http")) {
-      bengaliExplanation = "ইনপুট করা লিংকটি সঠিক নয় বা সমর্থিত ফরম্যাটে নেই।";
+      detailedExplanation = "The provided link is invalid or is not from a supported platform.";
     } else {
-      bengaliExplanation = "মিডিয়া স্ট্রিম ডাউনলোড করার সময় অনাকাঙ্ক্ষিত কোনো নেটওয়ার্ক বা প্ল্যাটফর্ম সীমাবদ্ধতা দেখা দিয়েছে।";
+      detailedExplanation = "An unexpected network or platform limitation occurred while retrieving this stream.";
     }
 
     const currentMediaUrl = rawUrl || (typeof window !== "undefined" ? window.location.href : "");
@@ -520,7 +520,7 @@ async function triggerSaveAs(url, filename) {
     const issueBody = encodeURIComponent(
       `### Issue Report\n` +
       `- **Error Title:** ${title}\n` +
-      `- **Cause / কারণ:** ${cause}\n` +
+      `- **Cause:** ${cause}\n` +
       `- **Media URL:** ${currentMediaUrl || "N/A"}\n` +
       `- **Environment:** ${isDesktopEnvironment() ? "180Hz Desktop Engine" : "Web Portal"}\n\n` +
       `*Reported automatically from 180Hz Downloader Web UI.*`
@@ -552,12 +552,12 @@ async function triggerSaveAs(url, filename) {
           <div class="error-cause-card">
             <div class="error-cause-label">
               <svg viewBox="0 0 24 24" class="ico" style="width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:2;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-              <span>Error Cause / কারণ:</span>
+              <span>Error Cause:</span>
             </div>
             <p class="error-cause-text">
               <strong>${escapeHtml(cause)}</strong>
             </p>
-            ${bengaliExplanation ? `<p style="font-size:12px;line-height:1.5;color:#fca5a5;margin-top:6px;">ℹ️ ${escapeHtml(bengaliExplanation)}</p>` : ""}
+            ${detailedExplanation ? `<p style="font-size:12px;line-height:1.5;color:#fca5a5;margin-top:6px;">ℹ️ ${escapeHtml(detailedExplanation)}</p>` : ""}
           </div>
 
           <!-- 2. Contact Tanjeem (Owner) Section -->
@@ -572,7 +572,7 @@ async function triggerSaveAs(url, filename) {
               <span class="owner-subtext">Direct Developer Support</span>
             </div>
             <p class="owner-contact-desc">
-              এই লিংকে কোনো সমস্যা বা ডাউনলোড ফেইল্ড হলে সরাসরি <strong>Tanjeem (Owner)</strong> এর সাথে যোগাযোগ করুন:
+              If this link fails to download or you encounter issues, please contact <strong>Tanjeem (Owner)</strong> directly:
             </p>
             <div class="owner-contact-actions">
               <a href="https://github.com/tanjeem180hz" target="_blank" rel="noopener noreferrer" class="contact-btn contact-btn-github" title="Visit Tanjeem's GitHub Profile">
