@@ -1251,11 +1251,11 @@ body.lamp-on .lamp-standby-hint {
 
 .hint-text {
   font-family: var(--font-m);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.08em;
   color: #ffffff;
-  text-transform: uppercase;
+  text-transform: none;
 }
 
 @keyframes hintBreathe {
