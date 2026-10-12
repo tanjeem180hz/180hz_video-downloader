@@ -475,8 +475,153 @@ async function triggerSaveAs(url, filename) {
     stepTimers.forEach(clearTimeout);
     stepsBox.classList.add("hidden");
   }
-  function showError(msg) {
-    zone.innerHTML = `<div class="error-box">${IC.alert}<span>${escapeHtml(msg)}</span></div>`;
+  function buildErrorCardHtml(opts = {}) {
+    const title = opts.title || "Download Failed";
+    let cause = String(opts.cause || opts.errorMessage || opts.message || "").trim();
+    if (!cause) {
+      cause = "The media stream could not be fetched or processed from the host platform.";
+    }
+    const code = opts.code || null;
+    const retryId = opts.retryId || null;
+    const retryText = opts.retryText || "🔄 Retry Download";
+    const tunnelUrl = opts.tunnelUrl || null;
+    const rawUrl = opts.url || (input && input.value ? input.value.trim() : "");
+    const showAppDownload = opts.showAppDownload !== false;
+
+    // Friendly Bengali & contextual explanation
+    let bengaliExplanation = "";
+    const lower = cause.toLowerCase();
+    if (lower.includes("login") || lower.includes("cookie") || lower.includes("bot") || lower.includes("empty media response") || lower.includes("restricted")) {
+      bengaliExplanation = "এই পোস্ট বা ভিডিওটি দেখতে প্ল্যাটফর্মের বিশেষ সিকিউরিটি ভেরিফিকেশন, বয়স সীমা অথবা লগইন অ্যাকাউন্ট প্রয়োজন।";
+    } else if (lower.includes("private") || lower.includes("unavailable") || lower.includes("deleted") || lower.includes("not found") || lower.includes("404")) {
+      bengaliExplanation = "মিডিয়া ফাইলটি প্রাইভেট করা হয়েছে, ডিলিট হয়েছে অথবা হোস্ট প্ল্যাটফর্ম থেকে সরিয়ে নেওয়া হয়েছে।";
+    } else if (lower.includes("connect") || lower.includes("failed to fetch") || lower.includes("networkerror") || lower.includes("local engine") || lower.includes("4000")) {
+      bengaliExplanation = "ডেস্কটপ ইঞ্জিন (Port 4000) এ কানেক্ট করা যাচ্ছে না অথবা ব্রাউজার লেভেলে রিকোয়েস্ট ব্লক হয়েছে।";
+    } else if (lower.includes("valid http")) {
+      bengaliExplanation = "ইনপুট করা লিংকটি সঠিক নয় বা সমর্থিত ফরম্যাটে নেই।";
+    } else {
+      bengaliExplanation = "মিডিয়া স্ট্রিম ডাউনলোড করার সময় অনাকাঙ্ক্ষিত কোনো নেটওয়ার্ক বা প্ল্যাটফর্ম সীমাবদ্ধতা দেখা দিয়েছে।";
+    }
+
+    const currentMediaUrl = rawUrl || (typeof window !== "undefined" ? window.location.href : "");
+    const issueTitle = encodeURIComponent(`[Issue]: ${title}`);
+    const issueBody = encodeURIComponent(
+      `### Issue Report\n` +
+      `- **Error Title:** ${title}\n` +
+      `- **Cause / কারণ:** ${cause}\n` +
+      `- **Media URL:** ${currentMediaUrl || "N/A"}\n` +
+      `- **Environment:** ${isDesktopEnvironment() ? "180Hz Desktop Engine" : "Web Portal"}\n\n` +
+      `*Reported automatically from 180Hz Downloader Web UI.*`
+    );
+    const emailSubject = encodeURIComponent(`180Hz Downloader Issue Report: ${title}`);
+    const emailBody = encodeURIComponent(
+      `Hello Tanjeem,\n\nI encountered the following download error on 180Hz Downloader:\n\n` +
+      `Title: ${title}\n` +
+      `Cause: ${cause}\n` +
+      `URL: ${currentMediaUrl}\n\n` +
+      `Please check and resolve this.\nThank you!`
+    );
+
+    return `
+      <div class="error-box error-box-enhanced">
+        <div class="error-box-icon">
+          ${IC.alert}
+        </div>
+        <div class="error-box-body">
+          <div class="error-box-header">
+            <div class="error-title-wrap">
+              <strong class="error-title">${escapeHtml(title)}</strong>
+              ${code ? `<span class="tag error-tag">${escapeHtml(code)}</span>` : ""}
+            </div>
+            <span class="error-alert-badge">Notice</span>
+          </div>
+
+          <!-- 1. Cause Section (FIRST as requested) -->
+          <div class="error-cause-card">
+            <div class="error-cause-label">
+              <svg viewBox="0 0 24 24" class="ico" style="width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:2;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+              <span>Error Cause / কারণ:</span>
+            </div>
+            <p class="error-cause-text">
+              <strong>${escapeHtml(cause)}</strong>
+            </p>
+            ${bengaliExplanation ? `<p style="font-size:12px;line-height:1.5;color:#fca5a5;margin-top:6px;">ℹ️ ${escapeHtml(bengaliExplanation)}</p>` : ""}
+          </div>
+
+          <!-- 2. Contact Tanjeem (Owner) Section -->
+          <div class="owner-contact-card">
+            <div class="owner-contact-header">
+              <div class="owner-badge-wrap">
+                <span class="owner-avatar-icon">👑</span>
+                <span class="owner-contact-title">
+                  Need Help or Fix? Contact <strong>Tanjeem (Owner)</strong>:
+                </span>
+              </div>
+              <span class="owner-subtext">Direct Developer Support</span>
+            </div>
+            <p class="owner-contact-desc">
+              এই লিংকে কোনো সমস্যা বা ডাউনলোড ফেইল্ড হলে সরাসরি <strong>Tanjeem (Owner)</strong> এর সাথে যোগাযোগ করুন:
+            </p>
+            <div class="owner-contact-actions">
+              <a href="https://github.com/tanjeem180hz" target="_blank" rel="noopener noreferrer" class="contact-btn contact-btn-github" title="Visit Tanjeem's GitHub Profile">
+                <svg viewBox="0 0 24 24" class="ico" style="width:13px;height:13px;fill:currentColor;"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+                <span>GitHub: @tanjeem180hz</span>
+              </a>
+              <a href="https://github.com/tanjeem180hz/180hz_video-downloader/issues/new?title=${issueTitle}&body=${issueBody}" target="_blank" rel="noopener noreferrer" class="contact-btn contact-btn-issue" title="Report issue directly on GitHub">
+                <svg viewBox="0 0 24 24" class="ico" style="width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:2;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                <span>🐛 Report Issue</span>
+              </a>
+              <a href="mailto:pbpb4709@gmail.com?subject=${emailSubject}&body=${emailBody}" class="contact-btn contact-btn-mail" title="Email Owner directly">
+                <svg viewBox="0 0 24 24" class="ico" style="width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:2;"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+                <span>✉️ Email Owner</span>
+              </a>
+            </div>
+          </div>
+
+          <!-- 3. Immediate Action Buttons -->
+          <div class="error-actions-row">
+            ${tunnelUrl ? `
+              <a href="${tunnelUrl}" target="_blank" rel="noopener" class="post-dl-btn post-dl-btn-primary" style="text-decoration:none;">
+                ⚡ Direct Download via Web Mirror
+              </a>
+            ` : ""}
+            ${retryId ? `
+              <button type="button" class="post-dl-btn post-dl-btn-redownload" id="${retryId}">
+                ${escapeHtml(retryText)}
+              </button>
+            ` : ""}
+            ${(showAppDownload && !isDesktopEnvironment()) ? `
+              <a href="180Hz Downloader Setup.exe" download="180Hz Downloader Setup.exe" class="post-dl-btn" style="background:rgba(216,255,62,0.12);color:var(--lime);border:1px solid rgba(216,255,62,0.3);text-decoration:none;">
+                💻 Try in 180Hz Downloader (.exe)
+              </a>
+            ` : ""}
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function showError(msg, details = {}) {
+    const causeText = typeof msg === "string" ? msg : (msg && msg.message ? msg.message : "Could not analyze link.");
+    const retryId = "errAnalyzeRetryBtn";
+    zone.innerHTML = buildErrorCardHtml({
+      title: details.title || "Link Analysis Failed",
+      cause: causeText,
+      code: details.code || "ANALYZE_ERROR",
+      retryId,
+      retryText: "🔄 Try Again",
+      url: details.url || (input && input.value ? input.value.trim() : ""),
+      showAppDownload: true
+    });
+    setTimeout(() => {
+      const rb = document.getElementById(retryId);
+      if (rb) {
+        rb.addEventListener("click", () => {
+          if (details.onRetry) details.onRetry();
+          else if (input && input.value) analyze(input.value);
+        });
+      }
+    }, 50);
   }
 
   function isDesktopEnvironment() {
@@ -1428,30 +1573,16 @@ async function triggerSaveAs(url, filename) {
               const isPlatformProtected = errMsg.includes("empty media response") || errMsg.includes("cookies") || errMsg.includes("login") || errMsg.includes("bot");
               const tunnelUrl = getWebTunnelUrl(r.url, r.provider);
 
-              errContainer.innerHTML = `
-                <div class="error-box">
-                  ${IC.alert}
-                  <div style="flex:1;">
-                    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-                      <strong>${isPlatformProtected ? "Platform Access Restricted" : "Download Failed"}</strong>
-                      ${currentJob.errorCode ? ` <span class="tag" style="background:rgba(239,68,68,.2);color:#fca5a5">${escapeHtml(currentJob.errorCode)}</span>` : ""}
-                    </div>
-                    <p style="margin-top:6px;font-size:12px;line-height:1.5;color:#fecaca;">
-                      ${isPlatformProtected 
-                        ? "এই পোস্টটি দেখতে প্ল্যাটফর্মের বিশেষ লগইন প্রয়োজন। আপনি নিচের ১-ক্লিক Web Mirror দিয়ে সাথে সাথে কোনো ত্রুটি ছাড়াই ফাইলটি ডাউনলোড করে নিতে পারেন:" 
-                        : escapeHtml(errMsg)}
-                    </p>
-                    <div style="margin-top:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
-                      <a href="${tunnelUrl}" target="_blank" rel="noopener" class="post-dl-btn post-dl-btn-primary" style="text-decoration:none;">
-                        ⚡ Direct Download via Web Mirror
-                      </a>
-                      <button type="button" class="post-dl-btn post-dl-btn-redownload" id="errRetryBtn">
-                        🔄 Retry Download
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              `;
+              errContainer.innerHTML = buildErrorCardHtml({
+                title: isPlatformProtected ? "Platform Access Restricted" : "Download Failed",
+                cause: errMsg,
+                code: currentJob.errorCode || "DL_FAILED",
+                retryId: "errRetryBtn",
+                retryText: "🔄 Retry Download",
+                tunnelUrl: tunnelUrl,
+                url: r.url,
+                showAppDownload: true
+              });
 
               setTimeout(() => {
                 const retryBtn = document.getElementById("errRetryBtn");
@@ -1483,23 +1614,27 @@ async function triggerSaveAs(url, filename) {
         fill.style.width = "0%";
         updateButtonLabel();
 
-        if (isDesktopEnvironment() || r.isLocalBackend) {
-          errContainer.innerHTML = `
-            <div class="error-box" style="margin-top:16px;">
-              ${IC.alert}
-              <div>
-                <strong>Download could not be started</strong>
-                <p style="margin-top:4px;">${escapeHtml(err && err.message ? err.message : "Failed to connect to local engine.")}</p>
-                <button type="button" class="chip" id="retryDownloadBtn" style="margin-top:8px;cursor:pointer;background:rgba(216,255,62,0.15);color:var(--lime);border:1px solid var(--lime);">🔄 Retry Download</button>
-              </div>
-            </div>
-          `;
-          setTimeout(() => {
-            const rb = document.getElementById("retryDownloadBtn");
-            if (rb) rb.addEventListener("click", () => executeDownload(selectedFormat));
-          }, 50);
-        } else {
-          renderDesktopInstallerCard(fmt);
+        const errMsg = (err && err.message) ? err.message : "Failed to connect to local engine.";
+        const tunnelUrl = getWebTunnelUrl(r.url, r.provider);
+
+        errContainer.innerHTML = buildErrorCardHtml({
+          title: "Download Initiation Failed",
+          cause: errMsg,
+          code: err.code || "INIT_FAILED",
+          retryId: "retryDownloadBtn",
+          retryText: "🔄 Retry Download",
+          tunnelUrl: tunnelUrl,
+          url: r.url,
+          showAppDownload: true
+        });
+
+        setTimeout(() => {
+          const rb = document.getElementById("retryDownloadBtn");
+          if (rb) rb.addEventListener("click", () => executeDownload(selectedFormat));
+        }, 50);
+
+        if (!isDesktopEnvironment() && !r.isLocalBackend) {
+          renderDesktopInstallerCard(fmt, true);
         }
         Ledger.bump(r.url);
       }
@@ -1539,12 +1674,12 @@ async function triggerSaveAs(url, filename) {
       }
     }
 
-    function renderDesktopInstallerCard(fmt) {
+    function renderDesktopInstallerCard(fmt, appendMode = false) {
       if (isDesktopEnvironment() || r.isLocalBackend) return;
 
       const formatLabel = fmt ? (fmt.label || getCanonicalResolution(fmt) || "Lossless 4K/8K") : "Lossless 4K/8K";
 
-      errContainer.innerHTML = `
+      const cardHtml = `
         <div class="desktop-installer-card" style="margin-top:16px;background:rgba(124,92,255,0.08);border:1px solid rgba(124,92,255,0.45);border-radius:12px;padding:20px;animation:card-in .4s ease;">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
             <div style="display:flex;align-items:center;gap:8px;">
@@ -1560,7 +1695,7 @@ async function triggerSaveAs(url, filename) {
             <a href="180Hz Downloader Setup.exe" download="180Hz Downloader Setup.exe" class="chip" style="background:var(--lime);color:#000;font-weight:700;font-size:12px;padding:10px 22px;text-decoration:none;border-radius:8px;display:inline-flex;align-items:center;gap:8px;box-shadow:0 0 20px rgba(216,255,62,0.25);">
               ${IC.dl} Download Windows App (.exe)
             </a>
-            <button type="button" id="openTurboDesktopBtn" class="chip" style="background:rgba(124,92,255,0.25);color:#c4b5fd;border:1px solid rgba(124,92,255,0.6);font-size:11px;padding:10px 18px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;border-radius:8px;">
+            <button type="button" class="chip openTurboDesktopBtn" style="background:rgba(124,92,255,0.25);color:#c4b5fd;border:1px solid rgba(124,92,255,0.6);font-size:11px;padding:10px 18px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;border-radius:8px;">
               ${IC.zap} Open in 180Hz Downloader Desktop (Lossless 4K/8K)
             </button>
           </div>
@@ -1572,13 +1707,21 @@ async function triggerSaveAs(url, filename) {
         </div>
       `;
 
+      if (appendMode) {
+        const wrap = document.createElement("div");
+        wrap.innerHTML = cardHtml;
+        errContainer.appendChild(wrap);
+      } else {
+        errContainer.innerHTML = cardHtml;
+      }
+
       setTimeout(() => {
-        const openDesktopBtn = errContainer.querySelector("#openTurboDesktopBtn");
-        if (openDesktopBtn) {
-          openDesktopBtn.addEventListener("click", () => {
+        const openDesktopBtns = errContainer.querySelectorAll(".openTurboDesktopBtn, #openTurboDesktopBtn");
+        openDesktopBtns.forEach(btnEl => {
+          btnEl.addEventListener("click", () => {
             handleLaunchOrInstallDesktop(r.url);
           });
-        }
+        });
       }, 0);
 
       fill.style.width = "100%";
@@ -1781,7 +1924,11 @@ async function triggerSaveAs(url, filename) {
       if (result.type === "youtube-download" || result.type === "embed") renderYouTubeCard(result);
       else renderDirect(result);
     } catch (e) {
-      showError(e instanceof Error ? e.message : "Could not analyze that link.");
+      showError(e instanceof Error ? e.message : "Could not analyze that link.", {
+        title: "Link Analysis Failed",
+        code: "ANALYZE_ERROR",
+        url: clean
+      });
     } finally {
       stopSteps();
       probing = false;
