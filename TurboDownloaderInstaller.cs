@@ -124,8 +124,6 @@ namespace TurboDownloaderInstaller
                 psi.WorkingDirectory = installDir;
                 Process.Start(psi);
             }
-
-            MessageBox.Show("180Hz Downloader 2.0 (PEAK/8K Engine) installed successfully!\n\n• Desktop shortcut has been created.\n• The application is now running and ready to download.", "180Hz Downloader Setup", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
         static void ExtractResourceOrCopy(string resourceName, string targetPath)

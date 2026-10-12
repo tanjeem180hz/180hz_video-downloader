@@ -13,6 +13,7 @@ using System.Windows.Forms;
 using System.Drawing;
 using System.Net.Sockets;
 using System.Linq;
+using System.Runtime.InteropServices;
 
 namespace TurboDownloader
 {
@@ -589,6 +590,51 @@ namespace TurboDownloader
             catch { }
         }
 
+        [DllImport("user32.dll")]
+        private static extern bool SetForegroundWindow(IntPtr hWnd);
+
+        [DllImport("user32.dll")]
+        private static extern bool BringWindowToTop(IntPtr hWnd);
+
+        [DllImport("user32.dll")]
+        private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+
+        [DllImport("user32.dll")]
+        private static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
+
+        [DllImport("user32.dll")]
+        private static extern void SwitchToThisWindow(IntPtr hWnd, bool fAltTab);
+
+        [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Auto)]
+        private static extern int GetWindowText(IntPtr hWnd, StringBuilder lpString, int nMaxCount);
+
+        [DllImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool EnumWindows(EnumWindowsProc lpEnumFunc, IntPtr lParam);
+
+        private delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+
+        private static readonly IntPtr HWND_TOPMOST = new IntPtr(-1);
+        private static readonly IntPtr HWND_NOTOPMOST = new IntPtr(-2);
+        private const uint SWP_NOMOVE = 0x0002;
+        private const uint SWP_NOSIZE = 0x0001;
+        private const uint SWP_SHOWWINDOW = 0x0040;
+
+        public static void ForceWindowToTop(IntPtr hWnd)
+        {
+            if (hWnd == IntPtr.Zero) return;
+            try
+            {
+                ShowWindow(hWnd, 9); // SW_RESTORE
+                SetWindowPos(hWnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
+                SetWindowPos(hWnd, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
+                SetForegroundWindow(hWnd);
+                BringWindowToTop(hWnd);
+                SwitchToThisWindow(hWnd, true);
+            }
+            catch { }
+        }
+
         private static void LaunchNativeWindow(int targetPort)
         {
             string edgePath1 = @"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe";
@@ -604,17 +650,64 @@ namespace TurboDownloader
 
             try
             {
+                Process p = null;
                 if (targetBrowser != null)
                 {
                     ProcessStartInfo psi = new ProcessStartInfo();
                     psi.FileName = targetBrowser;
                     psi.Arguments = string.Format("--app=\"{0}\" --window-size=1120,820", appUrl);
-                    Process.Start(psi);
+                    p = Process.Start(psi);
                 }
                 else
                 {
-                    Process.Start(appUrl);
+                    p = Process.Start(appUrl);
                 }
+
+                // Force 180Hz Downloader window to the topmost foreground above all running exes
+                Task.Factory.StartNew(() =>
+                {
+                    for (int i = 0; i < 20; i++)
+                    {
+                        Thread.Sleep(250);
+                        bool elevated = false;
+
+                        if (p != null)
+                        {
+                            try
+                            {
+                                p.Refresh();
+                                if (p.MainWindowHandle != IntPtr.Zero)
+                                {
+                                    ForceWindowToTop(p.MainWindowHandle);
+                                    elevated = true;
+                                }
+                            }
+                            catch { }
+                        }
+
+                        EnumWindows((hWnd, lParam) =>
+                        {
+                            try
+                            {
+                                StringBuilder sb = new StringBuilder(256);
+                                if (GetWindowText(hWnd, sb, 256) > 0)
+                                {
+                                    string title = sb.ToString();
+                                    if (title.IndexOf("180Hz", StringComparison.OrdinalIgnoreCase) >= 0)
+                                    {
+                                        ForceWindowToTop(hWnd);
+                                        elevated = true;
+                                        return false;
+                                    }
+                                }
+                            }
+                            catch { }
+                            return true;
+                        }, IntPtr.Zero);
+
+                        if (elevated && i >= 4) break;
+                    }
+                });
             }
             catch
             {
