@@ -130,53 +130,88 @@ function resolveDirect(u) {
   return { url: u.toString(), provider: u.hostname };
 }
 
-/* ---------------- realistic volumetric downward photon stream simulation ---------------- */
-(function photonField() {
+/* ---------------- professional volumetric slow-motion atmospheric photons ---------------- */
+(function atmosphericPhotons() {
   const c = $("#field");
   if (!c) return;
   const ctx = c.getContext("2d", { alpha: true });
   let w = (c.width = innerWidth), h = (c.height = innerHeight);
   const mouse = { x: -1e4, y: -1e4 };
 
-  const N = 145; // Photon particle count
+  const N = 115; // Elegant count for floating ambient photons
 
   const PALETTES = [
-    { prefix: "rgba(216, 255, 62, ", core: "rgba(255, 255, 255, ", glow: 8 },  // 180Hz Signature Lime
-    { prefix: "rgba(255, 255, 255, ", core: "rgba(255, 255, 255, ", glow: 10 }, // Incandescent White Core
-    { prefix: "rgba(255, 245, 190, ", core: "rgba(255, 255, 240, ", glow: 6 },  // Warm Filament Amber
-    { prefix: "rgba(180, 140, 255, ", core: "rgba(220, 200, 255, ", glow: 4 }   // High-Frequency Violet
+    // 180Hz Electric Lime: soft radiant halo, luminous core, diamond highlight
+    {
+      halo: "rgba(216, 255, 62, ",
+      core: "rgba(235, 255, 140, ",
+      sparkle: "rgba(255, 255, 255, "
+    },
+    // Warm Incandescent Gold / Filament Sunlight
+    {
+      halo: "rgba(255, 222, 130, ",
+      core: "rgba(255, 246, 200, ",
+      sparkle: "rgba(255, 255, 255, "
+    },
+    // Pure White Brilliant Diamond Mote
+    {
+      halo: "rgba(255, 255, 255, ",
+      core: "rgba(255, 255, 255, ",
+      sparkle: "rgba(255, 255, 255, "
+    },
+    // Soft Ambient Violet Spark
+    {
+      halo: "rgba(180, 140, 255, ",
+      core: "rgba(220, 200, 255, ",
+      sparkle: "rgba(255, 255, 255, "
+    }
   ];
 
   function createPhoton(seedY) {
-    let ratio = (Math.random() - 0.5) * 2;
-    ratio = Math.sign(ratio) * Math.pow(Math.abs(ratio), 1.25); // Concentration towards central core
-
-    const tier = Math.random();
-    let vy;
-    if (tier > 0.72) {
-      vy = 3.8 + Math.random() * 2.2; // High-energy fast photons
-    } else if (tier > 0.22) {
-      vy = 2.2 + Math.random() * 1.6; // Steady laminar beam photons
-    } else {
-      vy = 1.1 + Math.random() * 1.1; // Ambient micro-dust
-    }
-
-    const palIdx = Math.random() > 0.5 ? 0 : Math.random() > 0.4 ? 1 : Math.random() > 0.5 ? 2 : 3;
+    const palIdx = Math.random() > 0.5 ? 0 : Math.random() > 0.35 ? 1 : Math.random() > 0.5 ? 2 : 3;
     const pal = PALETTES[palIdx];
 
+    // Convection & slow-motion drift:
+    // 50% rise gently from below ("nich theke fly korte thake")
+    // 35% drift gently downwards along the light path
+    // 15% lazy hovering motes
+    const dir = Math.random();
+    let baseVy;
+    if (dir < 0.50) {
+      baseVy = -(0.16 + Math.random() * 0.32); // Slow upward float
+    } else if (dir < 0.85) {
+      baseVy = +(0.14 + Math.random() * 0.28); // Slow downward drift
+    } else {
+      baseVy = (Math.random() - 0.5) * 0.14;   // Lazy hover
+    }
+
+    const baseVx = (Math.random() - 0.5) * 0.26;
+
+    // Conical spread ratio (-1 to 1) with soft gaussian clustering towards center
+    let ratio = (Math.random() - 0.5) * 2;
+    ratio = Math.sign(ratio) * Math.pow(Math.abs(ratio), 1.2);
+
+    const initialY = seedY !== undefined ? seedY : (110 + Math.random() * (h - 110));
+
     return {
-      x: w / 2,
-      y: seedY !== undefined ? seedY : Math.random() * h,
-      vy: vy,
+      x: w / 2 + ratio * (Math.min(w * 0.44, 460) * (initialY / Math.max(1, h))),
+      y: initialY,
+      baseVx: baseVx,
+      baseVy: baseVy,
+      targetVy: baseVy,
       ratio: ratio,
-      size: 0.65 + Math.random() * 1.45,
-      baseAlpha: 0.65 + Math.random() * 0.35,
-      colorPrefix: pal.prefix,
-      corePrefix: pal.core,
-      glow: pal.glow,
-      wavePhase: Math.random() * Math.PI * 2,
-      waveFreq: 0.02 + Math.random() * 0.035,
-      waveAmp: 0.2 + Math.random() * 0.75,
+      size: 0.85 + Math.random() * 1.7, // Delicate glowing micro-mote
+      baseAlpha: 0.50 + Math.random() * 0.42,
+      pal: pal,
+      phaseX: Math.random() * Math.PI * 2,
+      freqX: 0.007 + Math.random() * 0.012,
+      ampX: 0.25 + Math.random() * 0.45,
+      phaseY: Math.random() * Math.PI * 2,
+      freqY: 0.006 + Math.random() * 0.010,
+      ampY: 0.20 + Math.random() * 0.35,
+      twinklePhase: Math.random() * Math.PI * 2,
+      twinkleSpeed: 0.016 + Math.random() * 0.024,
+      twinkleDepth: 0.25 + Math.random() * 0.25,
       fadeIn: seedY !== undefined ? 0 : Math.random()
     };
   }
@@ -205,13 +240,12 @@ function resolveDirect(u) {
     }
   });
 
-  // Global trigger for ignition burst when lamp powers on
+  // Global trigger on power-on: smoothly bloom all photons into living slow-motion light
   window.triggerPhotonIgnition = function() {
     for (let i = 0; i < parts.length; i++) {
       const p = parts[i];
-      p.y = 110 + Math.random() * 80;
-      p.fadeIn = 0.25;
-      p.vy = 4.6 + Math.random() * 3.6;
+      p.fadeIn = 0.2;
+      p.twinklePhase = Math.random() * Math.PI;
     }
   };
 
@@ -225,7 +259,7 @@ function resolveDirect(u) {
       return;
     }
 
-    // Dynamic origin of lamp fixture in viewport coordinates
+    // Dynamic origin of overhead lamp in viewport coordinates
     const lampHead = document.getElementById("lampClickableHead") || document.getElementById("studioLampSvg");
     let originX = w / 2;
     let originY = 110;
@@ -237,26 +271,39 @@ function resolveDirect(u) {
       }
     }
 
-    const topHalfWidth = 36;
-    const bottomHalfWidth = Math.min(w * 0.48, Math.max(500, w * 0.45));
+    const topHalfWidth = 38;
+    const bottomHalfWidth = Math.min(w * 0.50, Math.max(520, w * 0.46));
     const coneHeight = Math.max(1, h - originY);
 
-    // 1. Soft Volumetric God Rays (Undulating atmospheric light shafts)
+    // 1. Soft Volumetric Atmospheric Glow & Undulating God Rays
     const timeSec = performance.now() * 0.001;
-    for (let r = 0; r < 5; r++) {
-      const angleSpread = ((r - 2) / 2) * 0.36;
-      const rayBottomX = originX + Math.sin(angleSpread) * coneHeight * 0.88;
-      const rayWidth = 38 + r * 14;
-      const pulse = 0.016 + Math.sin(timeSec * 1.1 + r * 1.4) * 0.007;
+
+    // Bulb aperture soft bloom
+    const bulbGlow = ctx.createRadialGradient(originX, originY, 4, originX, originY + 60, 200);
+    bulbGlow.addColorStop(0, "rgba(255, 255, 240, 0.20)");
+    bulbGlow.addColorStop(0.25, "rgba(216, 255, 62, 0.08)");
+    bulbGlow.addColorStop(0.7, "rgba(216, 255, 62, 0.015)");
+    bulbGlow.addColorStop(1, "transparent");
+    ctx.beginPath();
+    ctx.arc(originX, originY + 30, 200, 0, Math.PI * 2);
+    ctx.fillStyle = bulbGlow;
+    ctx.fill();
+
+    // Very slow, soft atmospheric light shafts (no harsh lines, pure atmospheric haze)
+    for (let r = 0; r < 4; r++) {
+      const angleSpread = ((r - 1.5) / 1.5) * 0.32;
+      const rayBottomX = originX + Math.sin(angleSpread) * coneHeight * 0.85;
+      const rayWidth = 48 + r * 16;
+      const pulse = 0.014 + Math.sin(timeSec * 0.45 + r * 1.3) * 0.005; // 0.45 rad/s: gentle, peaceful breathing
 
       const rayGrad = ctx.createLinearGradient(originX, originY, rayBottomX, h);
-      rayGrad.addColorStop(0, `rgba(255, 255, 250, ${pulse * 2.2})`);
-      rayGrad.addColorStop(0.2, `rgba(216, 255, 62, ${pulse * 1.2})`);
-      rayGrad.addColorStop(0.7, "transparent");
+      rayGrad.addColorStop(0, `rgba(255, 255, 250, ${pulse * 1.8})`);
+      rayGrad.addColorStop(0.25, `rgba(216, 255, 62, ${pulse * 0.9})`);
+      rayGrad.addColorStop(0.85, "transparent");
 
       ctx.beginPath();
-      ctx.moveTo(originX - 12 + r * 6, originY);
-      ctx.lineTo(originX - 4 + r * 6, originY);
+      ctx.moveTo(originX - 10 + r * 6, originY);
+      ctx.lineTo(originX - 2 + r * 6, originY);
       ctx.lineTo(rayBottomX + rayWidth, h);
       ctx.lineTo(rayBottomX - rayWidth, h);
       ctx.closePath();
@@ -264,66 +311,95 @@ function resolveDirect(u) {
       ctx.fill();
     }
 
-    // 2. Downward Photon Particle Stream
+    // 2. Slow-Motion Floating Photons (Ambient illuminated air field)
     for (let i = 0; i < parts.length; i++) {
       const p = parts[i];
 
-      // Downward velocity step
-      p.y += p.vy;
+      // Smooth 2D harmonic wave drift
+      p.phaseX += p.freqX;
+      p.phaseY += p.freqY;
+      const driftX = p.baseVx + Math.sin(p.phaseX) * p.ampX;
+      const driftY = p.baseVy + Math.cos(p.phaseY) * p.ampY;
 
-      // Optical conical dispersion boundary calculation
-      const progressY = Math.max(0, Math.min(1, (p.y - originY) / coneHeight));
-      const currentHalfW = topHalfWidth + progressY * (bottomHalfWidth - topHalfWidth);
-      const idealX = originX + p.ratio * currentHalfW;
+      p.x += driftX;
+      p.y += driftY;
 
-      // Organic lateral drift with micro wave oscillation
-      p.wavePhase += p.waveFreq;
-      p.x += (idealX - p.x) * 0.045 + Math.sin(p.wavePhase) * p.waveAmp;
-
-      // Interactive cursor deflection (particles deflect around cursor)
+      // Soft aerodynamic swirl when mouse cursor passes nearby
       const mdx = p.x - mouse.x;
       const mdy = p.y - mouse.y;
       const md2 = mdx * mdx + mdy * mdy;
-      if (md2 < 7225 && md2 > 1) { // 85px radius
+      if (md2 < 12100 && md2 > 1) { // 110px soft influence radius
         const md = Math.sqrt(md2);
-        const push = (1 - md / 85) * 4.6;
+        const push = (1 - md / 110) * 0.75; // Very gentle slow motion wake
         p.x += (mdx / md) * push;
-        p.y += (mdy / md) * push * 0.35;
+        p.y += (mdy / md) * push * 0.6;
       }
 
-      // Recycle photon when exiting the bottom or screen bounds
-      if (p.y > h + 24 || p.x < -30 || p.x > w + 30) {
-        p.y = originY + Math.random() * 8;
-        let r = (Math.random() - 0.5) * 2;
-        p.ratio = Math.sign(r) * Math.pow(Math.abs(r), 1.25);
-        p.x = originX + p.ratio * (topHalfWidth * 0.85);
+      // Calculate position relative to conical light beam
+      const progressY = Math.max(0, Math.min(1, (p.y - originY) / coneHeight));
+      const currentHalfW = topHalfWidth + progressY * (bottomHalfWidth - topHalfWidth);
+      const distFromCenter = Math.abs(p.x - originX);
+
+      // Gentle restoring force to keep photons inhabiting the light beam
+      if (distFromCenter > currentHalfW * 1.1) {
+        p.baseVx -= Math.sign(p.x - originX) * 0.012;
+      }
+
+      // Seamless Slow-Motion Boundary Cycling ("nich theke jeno fly kortei thake all time")
+      // If particle floats up above the lamp head:
+      if (p.y < originY - 18) {
+        p.y = h - 15 - Math.random() * (h * 0.45); // Respawns in bottom region to fly upwards!
         p.fadeIn = 0;
+        p.baseVy = -(0.16 + Math.random() * 0.32); // Ascending upward drift
+        p.targetVy = p.baseVy;
         continue;
       }
+      // If particle drifts below bottom of screen:
+      if (p.y > h + 20) {
+        p.y = originY + 20 + Math.random() * (h * 0.5); // Respawns in mid/upper region
+        p.fadeIn = 0;
+        p.baseVy = +(0.14 + Math.random() * 0.28);
+        p.targetVy = p.baseVy;
+        continue;
+      }
+      // Horizontal wrapping
+      if (p.x < -30) p.x = w + 20;
+      else if (p.x > w + 30) p.x = -30;
 
-      // Fade in freshly born photons
-      if (p.fadeIn < 1) p.fadeIn += 0.045;
+      // Smooth fade-in
+      if (p.fadeIn < 1) p.fadeIn += 0.035;
 
-      // Realistic inverse-exponential optical falloff down to the bottom
-      const falloff = Math.pow(1 - progressY * 0.82, 1.35);
-      const alpha = Math.max(0, Math.min(1, p.baseAlpha * falloff * p.fadeIn));
-      if (alpha <= 0.01) continue;
+      // Luminosity based on beam proximity: brightest inside beam, softest outside
+      const inBeamFactor = Math.max(0.25, Math.min(1, 1.25 - (distFromCenter / (currentHalfW + 60))));
 
-      // Motion streak (directional speed streak)
-      const streakLen = Math.min(14, p.vy * 2.2);
+      // Gentle breathing shimmer / twinkle
+      p.twinklePhase += p.twinkleSpeed;
+      const shimmer = 1.0 - p.twinkleDepth + Math.sin(p.twinklePhase) * p.twinkleDepth;
+
+      // Realistic optical alpha
+      const alpha = Math.max(0, Math.min(1, p.baseAlpha * inBeamFactor * shimmer * p.fadeIn));
+      if (alpha <= 0.02) continue;
+
+      // RENDER: Glowing, spherical illuminated photon motes (NO RAIN LINES!)
+      // 1. Soft outer halo (diffuse optical radiance)
       ctx.beginPath();
-      ctx.strokeStyle = p.colorPrefix + (alpha * 0.72) + ")";
-      ctx.lineWidth = p.size;
-      ctx.lineCap = "round";
-      ctx.moveTo(p.x, Math.max(originY, p.y - streakLen));
-      ctx.lineTo(p.x, p.y);
-      ctx.stroke();
-
-      // Core luminous photon head
-      ctx.beginPath();
-      ctx.fillStyle = p.corePrefix + alpha + ")";
-      ctx.arc(p.x, p.y, p.size * 0.85, 0, 6.283);
+      ctx.fillStyle = p.pal.halo + (alpha * 0.24) + ")";
+      ctx.arc(p.x, p.y, p.size * 3.4, 0, Math.PI * 2);
       ctx.fill();
+
+      // 2. Luminous core
+      ctx.beginPath();
+      ctx.fillStyle = p.pal.core + (alpha * 0.88) + ")";
+      ctx.arc(p.x, p.y, p.size * 1.15, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 3. Diamond pinpoint sparkle center
+      if (p.size > 1.2 && alpha > 0.32) {
+        ctx.beginPath();
+        ctx.fillStyle = p.pal.sparkle + (alpha * 0.95) + ")";
+        ctx.arc(p.x, p.y, p.size * 0.45, 0, Math.PI * 2);
+        ctx.fill();
+      }
     }
 
     rafId = requestAnimationFrame(tick);
