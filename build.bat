@@ -28,6 +28,7 @@ copy /Y "web\index.html" "docs\index.html" >nul
 copy /Y "web\styles.css" "docs\styles.css" >nul
 copy /Y "web\app.js" "docs\app.js" >nul
 copy /Y "web\version.json" "docs\version.json" >nul
+copy /Y "web\version.json" "version.json" >nul
 copy /Y "web\click.mp3" "docs\click.mp3" >nul
 
 echo.

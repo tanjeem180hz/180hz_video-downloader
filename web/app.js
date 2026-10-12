@@ -2263,17 +2263,28 @@ async function triggerSaveAs(url, filename) {
      displays update prompt. Only visible when update is available.
      ======================================================== */
   const UpdateManager = (() => {
-    const CURRENT_VERSION = "2.1.0";
+    let currentVersion = "2.2.0";
     const GITHUB_REPO_OWNER = "tanjeem180hz";
     const GITHUB_REPO_NAME = "180hz_video-downloader";
-    const GITHUB_VERSION_URL = `https://raw.githubusercontent.com/${GITHUB_REPO_OWNER}/${GITHUB_REPO_NAME}/main/version.json`;
+    const GITHUB_VERSION_URL = `https://raw.githubusercontent.com/${GITHUB_REPO_OWNER}/${GITHUB_REPO_NAME}/main/web/version.json`;
+    const GITHUB_ROOT_VERSION_URL = `https://raw.githubusercontent.com/${GITHUB_REPO_OWNER}/${GITHUB_REPO_NAME}/main/version.json`;
     const GITHUB_PAGES_URL = `https://${GITHUB_REPO_OWNER}.github.io/${GITHUB_REPO_NAME}/version.json`;
     const GITHUB_SETUP_URL = `https://raw.githubusercontent.com/${GITHUB_REPO_OWNER}/${GITHUB_REPO_NAME}/main/180Hz%20Downloader%20Setup.exe`;
     const GITHUB_PAGE_URL = `https://github.com/${GITHUB_REPO_OWNER}/${GITHUB_REPO_NAME}`;
+    const AUTO_UPDATE_STORAGE_KEY = "180hz_auto_update_enabled";
 
     let isUpdateAvailable = false;
     let updateData = null;
     let isUpdating = false;
+    let isChecking = false;
+    let autoUpdateEnabled = true;
+
+    try {
+      const savedPref = localStorage.getItem(AUTO_UPDATE_STORAGE_KEY);
+      if (savedPref !== null) {
+        autoUpdateEnabled = savedPref !== "false";
+      }
+    } catch {}
 
     function parseSemver(v) {
       if (!v) return [0, 0, 0];
@@ -2294,70 +2305,177 @@ async function triggerSaveAs(url, filename) {
       return false;
     }
 
-    async function checkGithubVersion() {
-      // 1. Try local backend check endpoint first
-      try {
-        const res = await fetch(`${BACKEND_API_BASE}/system/check-update`, { cache: "no-store" });
-        if (res.ok) {
-          const data = await res.json();
-          if (data && data.success && data.latestVersion) {
-            handleVersionCheckResult(data.latestVersion, data);
-            return;
-          }
-        }
-      } catch {}
-
-      // 2. Fetch directly from GitHub raw URL with timestamp cache-buster
-      const ts = Date.now();
-      try {
-        const res = await fetch(`${GITHUB_VERSION_URL}?_=${ts}`, { cache: "no-store" });
-        if (res.ok) {
-          const data = await res.json();
-          if (data && data.version) {
-            handleVersionCheckResult(data.version, data);
-            return;
-          }
-        }
-      } catch {}
-
-      // 3. Fallback to GitHub Pages
-      try {
-        const res = await fetch(`${GITHUB_PAGES_URL}?_=${ts}`, { cache: "no-store" });
-        if (res.ok) {
-          const data = await res.json();
-          if (data && data.version) {
-            handleVersionCheckResult(data.version, data);
-            return;
-          }
-        }
-      } catch {}
+    function updateAutoToggleUi() {
+      const toggleBtn = document.getElementById("autoUpdateToggleBtn");
+      const toggleText = document.getElementById("autoUpdateToggleText");
+      if (toggleBtn) {
+        toggleBtn.classList.toggle("active", autoUpdateEnabled);
+      }
+      if (toggleText) {
+        toggleText.textContent = autoUpdateEnabled ? "Auto: ON" : "Auto: OFF";
+      }
     }
 
-    function handleVersionCheckResult(remoteVersion, fullData) {
-      if (isNewer(remoteVersion, CURRENT_VERSION)) {
+    function setSectionState({ badgeText, badgeType, subtext, spinning, hasUpdate, updating, progress }) {
+      const sectionEl = document.getElementById("appUpdateSection");
+      const iconWrap = document.getElementById("updateIconWrap");
+      const badgeEl = document.getElementById("updateSectionBadge");
+      const subEl = document.getElementById("updateSectionSubtext");
+      const progWrap = document.getElementById("updateSectionProgressWrap");
+      const progFill = document.getElementById("updateSectionProgressFill");
+
+      if (sectionEl) {
+        sectionEl.classList.toggle("has-update", Boolean(hasUpdate && !updating));
+        sectionEl.classList.toggle("updating", Boolean(updating));
+      }
+      if (iconWrap) {
+        iconWrap.classList.toggle("spinning", Boolean(spinning || updating));
+      }
+      if (badgeEl && badgeText) {
+        badgeEl.textContent = badgeText;
+        badgeEl.className = `update-status-badge ${badgeType || "ok"}`;
+      }
+      if (subEl && subtext) {
+        subEl.textContent = subtext;
+        subEl.title = subtext;
+      }
+      if (progWrap && progFill) {
+        if (typeof progress === "number" && progress > 0) {
+          progWrap.classList.remove("hidden");
+          progFill.style.width = `${Math.min(100, Math.max(5, progress))}%`;
+        } else {
+          progWrap.classList.add("hidden");
+          progFill.style.width = "0%";
+        }
+      }
+    }
+
+    async function checkGithubVersion(manual = false) {
+      if (isUpdating || isChecking) return;
+      isChecking = true;
+
+      const checkBtn = document.getElementById("checkUpdateNowBtn");
+      const checkBtnText = document.getElementById("checkUpdateBtnText");
+      if (manual) {
+        if (checkBtn) checkBtn.disabled = true;
+        if (checkBtnText) checkBtnText.textContent = "Checking…";
+        setSectionState({
+          badgeText: "CHECKING GITHUB…",
+          badgeType: "updating",
+          subtext: "Checking GitHub Live Release server for latest updates...",
+          spinning: true,
+          hasUpdate: false,
+          updating: false,
+          progress: 0
+        });
+      }
+
+      try {
+        // 1. Try local backend check endpoint first (compares both version & live file hashes)
+        try {
+          const res = await fetch(`${BACKEND_API_BASE}/system/check-update?_ts=${Date.now()}`, { cache: "no-store" });
+          if (res.ok) {
+            const data = await res.json();
+            if (data && data.success) {
+              if (data.currentVersion) currentVersion = data.currentVersion;
+              handleVersionCheckResult(data.latestVersion || currentVersion, data, manual);
+              isChecking = false;
+              if (checkBtn) checkBtn.disabled = false;
+              if (checkBtnText) checkBtnText.textContent = "Check";
+              return;
+            }
+          }
+        } catch {}
+
+        // 2. Fallback: Fetch directly from GitHub raw URL with timestamp cache-buster
+        const ts = Date.now();
+        const urls = [
+          `${GITHUB_VERSION_URL}?_=${ts}`,
+          `${GITHUB_ROOT_VERSION_URL}?_=${ts}`,
+          `${GITHUB_PAGES_URL}?_=${ts}`
+        ];
+        for (const u of urls) {
+          try {
+            const res = await fetch(u, { cache: "no-store" });
+            if (res.ok) {
+              const data = await res.json();
+              if (data && data.version) {
+                handleVersionCheckResult(data.version, data, manual);
+                break;
+              }
+            }
+          } catch {}
+        }
+      } finally {
+        isChecking = false;
+        if (checkBtn) checkBtn.disabled = false;
+        if (checkBtnText) checkBtnText.textContent = "Check";
+      }
+    }
+
+    function handleVersionCheckResult(remoteVersion, fullData, manual = false) {
+      const hasBackendUpdate = Boolean(fullData && fullData.hasUpdate);
+      const versionIsNewer = isNewer(remoteVersion, currentVersion);
+      const needsUpdate = hasBackendUpdate || versionIsNewer;
+
+      if (needsUpdate) {
         isUpdateAvailable = true;
         updateData = fullData || { version: remoteVersion };
-        applyUpdateGate(remoteVersion, updateData);
+        const labelVer = remoteVersion || currentVersion;
+        const reason = versionIsNewer
+          ? `New version v${labelVer} available on GitHub`
+          : `New GitHub build (${(fullData && fullData.remoteHash) || "latest"}) available`;
+
+        setSectionState({
+          badgeText: `UPDATE READY · v${labelVer}`,
+          badgeType: "available",
+          subtext: `${reason} — ${autoUpdateEnabled ? "Auto-updating now..." : "Click 'Update Now' to install"}`,
+          spinning: false,
+          hasUpdate: true,
+          updating: false,
+          progress: 0
+        });
+
+        const applyBtnText = document.getElementById("applyUpdateBtnText");
+        if (applyBtnText) applyBtnText.textContent = `Update to v${labelVer}`;
+
+        if (versionIsNewer) {
+          applyUpdateGate(remoteVersion, updateData);
+        }
+
+        // If Auto-Update is enabled, automatically apply the update!
+        if (autoUpdateEnabled && !isUpdating && (rIsLocalOrDesktop())) {
+          setTimeout(() => {
+            if (!isUpdating && autoUpdateEnabled) {
+              executeUpdate();
+            }
+          }, 1200);
+        }
       } else {
         isUpdateAvailable = false;
         removeUpdateGate();
+        const hashSuffix = (fullData && fullData.localHash) ? ` · Build #${fullData.localHash.slice(0, 6)}` : "";
+        setSectionState({
+          badgeText: `UP TO DATE · v${currentVersion}`,
+          badgeType: "ok",
+          subtext: manual
+            ? `✓ Checked just now — 180Hz Downloader v${currentVersion}${hashSuffix} is 100% up to date`
+            : `Connected to GitHub Live Release · v${currentVersion}${hashSuffix} · Auto-Update ${autoUpdateEnabled ? "ON" : "OFF"}`,
+          spinning: false,
+          hasUpdate: false,
+          updating: false,
+          progress: 0
+        });
+        const applyBtnText = document.getElementById("applyUpdateBtnText");
+        if (applyBtnText) applyBtnText.textContent = "Update Now";
       }
     }
 
+    function rIsLocalOrDesktop() {
+      return isDesktopEnvironment();
+    }
+
     function applyUpdateGate(latestVersion, data) {
-      // 1. Lock the application
-      document.body.classList.add("version-locked");
-
-      const urlInp = document.getElementById("urlInput");
-      if (urlInp) {
-        urlInp.disabled = true;
-        urlInp.placeholder = "⚠️ VERSION DEPRECATED — Please click UPDATE NOW above to continue";
-      }
-
-      const anBtn = document.getElementById("analyzeBtn");
-      if (anBtn) anBtn.disabled = true;
-
-      // 2. Populate version numbers
       const gateCard = document.getElementById("updateGateCard");
       const navBtn = document.getElementById("navUpdateBtn");
       const gateCurrent = document.getElementById("gateCurrentVer");
@@ -2365,14 +2483,13 @@ async function triggerSaveAs(url, filename) {
       const navVer = document.getElementById("navUpdateVer");
       const changelog = document.getElementById("gateChangelog");
 
-      if (gateCurrent) gateCurrent.textContent = `v${CURRENT_VERSION}`;
+      if (gateCurrent) gateCurrent.textContent = `v${currentVersion}`;
       if (gateLatest) gateLatest.textContent = `v${latestVersion}`;
       if (navVer) navVer.textContent = `v${latestVersion}`;
       if (changelog && data && data.changelog) {
         changelog.textContent = `Release notes: ${data.changelog}`;
       }
 
-      // 3. Show Update button & gate card (MUST only show when update exists)
       if (gateCard) gateCard.classList.remove("hidden");
       if (navBtn) navBtn.classList.remove("hidden");
     }
@@ -2395,33 +2512,151 @@ async function triggerSaveAs(url, filename) {
       if (navBtn) navBtn.classList.add("hidden");
     }
 
+    function waitForEngineRestartAndReload() {
+      let attempts = 0;
+      const startWait = Date.now();
+      setSectionState({
+        badgeText: "RESTARTING… 96%",
+        badgeType: "updating",
+        subtext: "Restarting 180Hz Engine & applying update — reconnecting...",
+        spinning: true,
+        hasUpdate: false,
+        updating: true,
+        progress: 96
+      });
+
+      const timer = setInterval(async () => {
+        attempts++;
+        // Wait at least 900ms so the old process has exited
+        if (Date.now() - startWait < 900) return;
+
+        try {
+          const ctrl = new AbortController();
+          const t = setTimeout(() => ctrl.abort(), 1200);
+          const res = await fetch(`${BACKEND_API_BASE}/health?_ts=${Date.now()}`, {
+            cache: "no-store",
+            signal: ctrl.signal
+          });
+          clearTimeout(t);
+          if (res.ok) {
+            const hData = await res.json();
+            if (hData && hData.success && !hData.isApplyingAppUpdate) {
+              clearInterval(timer);
+              setSectionState({
+                badgeText: "✓ UPDATED 100%",
+                badgeType: "ok",
+                subtext: "✓ Update installed successfully! Reloading application...",
+                spinning: false,
+                hasUpdate: false,
+                updating: true,
+                progress: 100
+              });
+              try {
+                sessionStorage.setItem("180hz_just_updated", "true");
+              } catch {}
+              setTimeout(() => {
+                window.location.replace(`${window.location.pathname}?updated=${Date.now()}`);
+              }, 450);
+              return;
+            }
+          }
+        } catch {}
+
+        if (attempts > 35) {
+          clearInterval(timer);
+          isUpdating = false;
+          window.location.reload();
+        }
+      }, 500);
+    }
+
     async function executeUpdate() {
       if (isUpdating) return;
       isUpdating = true;
 
-      const btn = document.getElementById("gateUpdateBtn");
-      const btnText = document.getElementById("gateUpdateBtnText");
+      const gateBtn = document.getElementById("gateUpdateBtn");
+      const gateBtnText = document.getElementById("gateUpdateBtnText");
       const navBtn = document.getElementById("navUpdateBtn");
+      const applyBtn = document.getElementById("applyUpdateNowBtn");
+      const applyBtnText = document.getElementById("applyUpdateBtnText");
+      const checkBtn = document.getElementById("checkUpdateNowBtn");
 
-      if (btn) btn.disabled = true;
-      if (btnText) btnText.innerHTML = `<span class="spin-ring"></span> DOWNLOADING UPDATE FROM GITHUB...`;
+      if (gateBtn) gateBtn.disabled = true;
+      if (gateBtnText) gateBtnText.innerHTML = `<span class="spin-ring"></span> UPDATING FROM GITHUB...`;
       if (navBtn) navBtn.disabled = true;
+      if (applyBtn) applyBtn.disabled = true;
+      if (applyBtnText) applyBtnText.textContent = "Updating…";
+      if (checkBtn) checkBtn.disabled = true;
 
-      // Try backend automatic installer application first
+      setSectionState({
+        badgeText: "UPDATING… 12%",
+        badgeType: "updating",
+        subtext: "Connecting to GitHub Live Release & downloading latest update...",
+        spinning: true,
+        hasUpdate: false,
+        updating: true,
+        progress: 12
+      });
+
+      // Try backend automatic self-updater first
       try {
         const res = await fetch(`${BACKEND_API_BASE}/system/apply-update`, {
           method: "POST",
           headers: { "Content-Type": "application/json" }
         });
-        const data = await res.json();
-        if (data && data.success) {
-          if (btnText) btnText.textContent = "LAUNCHING INSTALLER & RESTARTING...";
-          return;
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.success) {
+            // Poll /api/v1/system/update-status until backend restarts
+            const statusTimer = setInterval(async () => {
+              try {
+                const sRes = await fetch(`${BACKEND_API_BASE}/system/update-status?_ts=${Date.now()}`, { cache: "no-store" });
+                if (!sRes.ok) {
+                  clearInterval(statusTimer);
+                  waitForEngineRestartAndReload();
+                  return;
+                }
+                const sData = await sRes.json();
+                const pct = (sData && typeof sData.progress === "number") ? sData.progress : 50;
+                const stg = (sData && sData.stage) || "Installing update from GitHub...";
+                setSectionState({
+                  badgeText: `UPDATING… ${pct}%`,
+                  badgeType: "updating",
+                  subtext: stg,
+                  spinning: true,
+                  hasUpdate: false,
+                  updating: true,
+                  progress: pct
+                });
+                if (gateBtnText) gateBtnText.textContent = `${stg.toUpperCase()} (${pct}%)`;
+
+                if (pct >= 92) {
+                  clearInterval(statusTimer);
+                  waitForEngineRestartAndReload();
+                }
+              } catch {
+                // Backend closed listener to restart — switch to reconnect polling!
+                clearInterval(statusTimer);
+                waitForEngineRestartAndReload();
+              }
+            }, 350);
+            return;
+          }
         }
       } catch {}
 
-      // Fallback: download setup directly or open GitHub release in browser
+      // Fallback if running purely on remote web without local desktop engine
       const dlUrl = (updateData && updateData.downloadUrl) || GITHUB_SETUP_URL;
+      setSectionState({
+        badgeText: "DOWNLOADING SETUP",
+        badgeType: "updating",
+        subtext: "Downloading latest 180Hz Downloader Setup.exe from GitHub...",
+        spinning: false,
+        hasUpdate: false,
+        updating: true,
+        progress: 100
+      });
+
       try {
         const a = document.createElement("a");
         a.href = dlUrl;
@@ -2430,20 +2665,78 @@ async function triggerSaveAs(url, filename) {
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
-        if (btnText) btnText.textContent = "DOWNLOAD STARTED — RUN SETUP TO COMPLETE";
+        if (gateBtnText) gateBtnText.textContent = "DOWNLOAD STARTED — RUN SETUP TO COMPLETE";
       } catch {
         window.open(GITHUB_PAGE_URL, "_blank");
       }
 
       setTimeout(() => {
         isUpdating = false;
-        if (btn) btn.disabled = false;
-        if (btnText) btnText.textContent = "UPDATE NOW & RESTART";
+        if (gateBtn) gateBtn.disabled = false;
+        if (gateBtnText) gateBtnText.textContent = "UPDATE NOW & RESTART";
         if (navBtn) navBtn.disabled = false;
-      }, 8000);
+        if (applyBtn) applyBtn.disabled = false;
+        if (applyBtnText) applyBtnText.textContent = "Update Now";
+        if (checkBtn) checkBtn.disabled = false;
+      }, 6000);
     }
 
     function init() {
+      updateAutoToggleUi();
+
+      // Check if we just reloaded after a successful auto-update
+      try {
+        const justUpdated = sessionStorage.getItem("180hz_just_updated") === "true" || window.location.search.includes("updated=");
+        if (justUpdated) {
+          sessionStorage.removeItem("180hz_just_updated");
+          if (window.location.search.includes("updated=")) {
+            window.history.replaceState({}, document.title, window.location.pathname);
+          }
+          setSectionState({
+            badgeText: `✓ UPDATED · v${currentVersion}`,
+            badgeType: "ok",
+            subtext: `✓ App successfully updated to latest GitHub release (v${currentVersion})`,
+            spinning: false,
+            hasUpdate: false,
+            updating: false,
+            progress: 0
+          });
+        }
+      } catch {}
+
+      const toggleBtn = document.getElementById("autoUpdateToggleBtn");
+      if (toggleBtn) {
+        toggleBtn.addEventListener("click", (e) => {
+          e.preventDefault();
+          autoUpdateEnabled = !autoUpdateEnabled;
+          try {
+            localStorage.setItem(AUTO_UPDATE_STORAGE_KEY, autoUpdateEnabled ? "true" : "false");
+          } catch {}
+          updateAutoToggleUi();
+          if (autoUpdateEnabled && isUpdateAvailable && !isUpdating) {
+            executeUpdate();
+          } else if (!isUpdating) {
+            checkGithubVersion(false);
+          }
+        });
+      }
+
+      const checkBtn = document.getElementById("checkUpdateNowBtn");
+      if (checkBtn) {
+        checkBtn.addEventListener("click", (e) => {
+          e.preventDefault();
+          checkGithubVersion(true);
+        });
+      }
+
+      const applyBtn = document.getElementById("applyUpdateNowBtn");
+      if (applyBtn) {
+        applyBtn.addEventListener("click", (e) => {
+          e.preventDefault();
+          executeUpdate();
+        });
+      }
+
       const gateBtn = document.getElementById("gateUpdateBtn");
       if (gateBtn) {
         gateBtn.addEventListener("click", (e) => {
@@ -2461,16 +2754,16 @@ async function triggerSaveAs(url, filename) {
       }
 
       // Check version immediately on launch
-      checkGithubVersion();
+      checkGithubVersion(false);
 
       // Re-check periodically every 45 seconds
-      setInterval(checkGithubVersion, 45000);
+      setInterval(() => checkGithubVersion(false), 45000);
 
       // Re-check when window regains focus
-      window.addEventListener("focus", checkGithubVersion, { passive: true });
+      window.addEventListener("focus", () => checkGithubVersion(false), { passive: true });
     }
 
-    return { init, checkGithubVersion, executeUpdate, CURRENT_VERSION };
+    return { init, checkGithubVersion, executeUpdate, CURRENT_VERSION: currentVersion };
   })();
 
   /* ══════════════════════════════════════════════════════════════════

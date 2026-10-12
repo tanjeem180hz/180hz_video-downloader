@@ -1,10 +1,10 @@
 {
-  "version": "2.1.0",
-  "versionCode": 210,
-  "minRequiredVersion": "2.1.0",
-  "releaseDate": "2026-10-12",
+  "version": "2.2.0",
+  "versionCode": 220,
+  "minRequiredVersion": "2.2.0",
+  "releaseDate": "2026-10-13",
   "appName": "180Hz Downloader",
   "downloadUrl": "https://raw.githubusercontent.com/tanjeem180hz/180hz_video-downloader/main/180Hz%20Downloader%20Setup.exe",
   "githubUrl": "https://github.com/tanjeem180hz/180hz_video-downloader",
-  "changelog": "Volumetric lighting, slow-motion atmospheric photons, and mandatory GitHub auto-update system."
+  "changelog": "Added Custom Save Folder (This PC) with 1st-time prompt & persistence, plus dedicated App Auto-Update section with 100% live GitHub sync."
 }

@@ -96,12 +96,20 @@ namespace TurboDownloader
         private static bool isDownloadingDeps = false;
         private static string depStatusMessage = "Ready";
 
-        private const string APP_VERSION = "2.1.0";
-        private const int APP_VERSION_CODE = 210;
-        private const string GITHUB_VERSION_URL = "https://raw.githubusercontent.com/tanjeem180hz/180hz_video-downloader/main/version.json";
+        private const string APP_VERSION = "2.2.0";
+        private const int APP_VERSION_CODE = 220;
+        private const string GITHUB_RAW_BASE_URL = "https://raw.githubusercontent.com/tanjeem180hz/180hz_video-downloader/main";
+        private const string GITHUB_VERSION_URL = "https://raw.githubusercontent.com/tanjeem180hz/180hz_video-downloader/main/web/version.json";
+        private const string GITHUB_ROOT_VERSION_URL = "https://raw.githubusercontent.com/tanjeem180hz/180hz_video-downloader/main/version.json";
         private const string GITHUB_PAGES_VERSION_URL = "https://tanjeem180hz.github.io/180hz_video-downloader/version.json";
         private const string GITHUB_SETUP_DOWNLOAD_URL = "https://raw.githubusercontent.com/tanjeem180hz/180hz_video-downloader/main/180Hz%20Downloader%20Setup.exe";
         private const string GITHUB_REPO_URL = "https://github.com/tanjeem180hz/180hz_video-downloader";
+
+        private static bool isApplyingAppUpdate = false;
+        private static int appUpdateProgress = 0;
+        private static string appUpdateStage = "Up to date";
+        private static string appUpdateError = "";
+        private static bool hasRecentBrowserHealthPing = false;
 
         private static string FindSystemFFmpeg()
         {
@@ -558,7 +566,7 @@ namespace TurboDownloader
         }
 
         [STAThread]
-        static void Main()
+        static void Main(string[] args)
         {
             try
             {
@@ -574,24 +582,141 @@ namespace TurboDownloader
                     catch { }
                 };
 
+                bool isRestartedFromUpdate = false;
+                bool isApplyUpdateArg = false;
+                string applyTargetExe = null;
+                if (args != null)
+                {
+                    for (int i = 0; i < args.Length; i++)
+                    {
+                        string a = args[i] ?? "";
+                        if (string.Equals(a, "--restarted-from-update", StringComparison.OrdinalIgnoreCase))
+                        {
+                            isRestartedFromUpdate = true;
+                        }
+                        else if (string.Equals(a, "--apply-update", StringComparison.OrdinalIgnoreCase))
+                        {
+                            isApplyUpdateArg = true;
+                            if (i + 1 < args.Length && !string.IsNullOrEmpty(args[i + 1]))
+                            {
+                                applyTargetExe = args[i + 1];
+                            }
+                        }
+                    }
+                }
+
                 string currentExe = Application.ExecutablePath;
                 string currentExeName = Path.GetFileName(currentExe) ?? "";
-                if (currentExeName.IndexOf("Setup", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+                string installDir = Path.Combine(localAppData, "Programs", "180Hz Downloader");
+
+                // Clean up any leftover .old files from atomic self-updates
+                try
+                {
+                    string localOld = currentExe + ".old";
+                    if (File.Exists(localOld)) File.Delete(localOld);
+                }
+                catch { }
+                try
+                {
+                    string instOld = Path.Combine(installDir, "180Hz Downloader.exe.old");
+                    if (File.Exists(instOld)) File.Delete(instOld);
+                }
+                catch { }
+
+                if (isApplyUpdateArg ||
+                    currentExeName.IndexOf("Setup", StringComparison.OrdinalIgnoreCase) >= 0 ||
                     currentExeName.IndexOf("Update", StringComparison.OrdinalIgnoreCase) >= 0)
                 {
                     try
                     {
-                        string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-                        string installDir = Path.Combine(localAppData, "Programs", "180Hz Downloader");
                         if (!Directory.Exists(installDir)) Directory.CreateDirectory(installDir);
                         string installedExe = Path.Combine(installDir, "180Hz Downloader.exe");
+
+                        // Terminate any running 180Hz Downloader instances so file locks are released
+                        int myPid = Process.GetCurrentProcess().Id;
+                        string[] procNames = new string[] { "180Hz Downloader", "180HzDownloader", "TurboDownloader" };
+                        foreach (string pName in procNames)
+                        {
+                            try
+                            {
+                                foreach (Process p in Process.GetProcessesByName(pName))
+                                {
+                                    if (p.Id != myPid)
+                                    {
+                                        try { p.Kill(); p.WaitForExit(2500); } catch { }
+                                    }
+                                }
+                            }
+                            catch { }
+                        }
+
                         if (!string.Equals(Path.GetFullPath(currentExe), Path.GetFullPath(installedExe), StringComparison.OrdinalIgnoreCase))
                         {
-                            File.Copy(currentExe, installedExe, true);
-                            EnsureEmbeddedWebAssets(installDir, true);
+                            for (int retry = 0; retry < 15; retry++)
+                            {
+                                try
+                                {
+                                    if (File.Exists(installedExe))
+                                    {
+                                        string bak = installedExe + ".old";
+                                        try { if (File.Exists(bak)) File.Delete(bak); } catch { }
+                                        try { File.Move(installedExe, bak); } catch { }
+                                    }
+                                    File.Copy(currentExe, installedExe, true);
+                                    break;
+                                }
+                                catch
+                                {
+                                    Thread.Sleep(250);
+                                }
+                            }
+
+                            // Only overwrite embedded web assets on fresh Setup, not when --apply-update already wrote latest GitHub web files
+                            EnsureEmbeddedWebAssets(installDir, !isApplyUpdateArg);
+                        }
+
+                        string launchExe = installedExe;
+                        if (!string.IsNullOrEmpty(applyTargetExe))
+                        {
+                            try
+                            {
+                                if (!string.Equals(Path.GetFullPath(currentExe), Path.GetFullPath(applyTargetExe), StringComparison.OrdinalIgnoreCase) &&
+                                    !string.Equals(Path.GetFullPath(installedExe), Path.GetFullPath(applyTargetExe), StringComparison.OrdinalIgnoreCase))
+                                {
+                                    for (int retry = 0; retry < 15; retry++)
+                                    {
+                                        try
+                                        {
+                                            if (File.Exists(applyTargetExe))
+                                            {
+                                                string bak = applyTargetExe + ".old";
+                                                try { if (File.Exists(bak)) File.Delete(bak); } catch { }
+                                                try { File.Move(applyTargetExe, bak); } catch { }
+                                            }
+                                            File.Copy(currentExe, applyTargetExe, true);
+                                            break;
+                                        }
+                                        catch
+                                        {
+                                            Thread.Sleep(250);
+                                        }
+                                    }
+                                }
+                                if (File.Exists(applyTargetExe)) launchExe = applyTargetExe;
+                            }
+                            catch { }
+                        }
+
+                        if (!string.Equals(Path.GetFullPath(currentExe), Path.GetFullPath(launchExe), StringComparison.OrdinalIgnoreCase))
+                        {
                             ProcessStartInfo psi = new ProcessStartInfo();
-                            psi.FileName = installedExe;
-                            psi.WorkingDirectory = installDir;
+                            psi.FileName = launchExe;
+                            psi.WorkingDirectory = Path.GetDirectoryName(launchExe) ?? installDir;
+                            if (isApplyUpdateArg || currentExeName.IndexOf("Update", StringComparison.OrdinalIgnoreCase) >= 0)
+                            {
+                                psi.Arguments = "--restarted-from-update";
+                            }
                             psi.UseShellExecute = true;
                             Process.Start(psi);
                             return;
@@ -634,7 +759,7 @@ namespace TurboDownloader
                     try { appMutex = new Mutex(true, "Local\\180HzDownloader_SingleInstance", out createdNew); } catch { createdNew = true; }
                 }
 
-                if (!createdNew)
+                if (!createdNew && !isRestartedFromUpdate)
                 {
                     Process currentProc = Process.GetCurrentProcess();
                     bool anotherIsRunning = false;
@@ -689,8 +814,22 @@ namespace TurboDownloader
                 // Save active port
                 try { File.WriteAllText(portFilePath, port.ToString()); } catch { }
 
-                // Launch Desktop Application Window
-                LaunchNativeWindow(port);
+                // Launch Desktop Application Window (if restarted from update, let open browser reconnect first)
+                if (isRestartedFromUpdate)
+                {
+                    Task.Factory.StartNew(() =>
+                    {
+                        Thread.Sleep(4500);
+                        if (!hasRecentBrowserHealthPing)
+                        {
+                            LaunchNativeWindow(port);
+                        }
+                    });
+                }
+                else
+                {
+                    LaunchNativeWindow(port);
+                }
 
                 // Run Tray App & Message Loop
                 RunTrayApp();
@@ -1004,12 +1143,17 @@ namespace TurboDownloader
                 // Engine Health & Status Check
                 if (rawUrl == "/api/v1/health" && req.HttpMethod == "GET")
                 {
+                    hasRecentBrowserHealthPing = true;
                     SendJson(res, new {
                         success = true,
-                        engine = "180Hz Downloader 2.0",
+                        engine = "180Hz Downloader " + GetLocalAppVersion(),
+                        version = GetLocalAppVersion(),
                         status = depStatusMessage,
                         isReady = File.Exists(ytdlpPath) && File.Exists(ffmpegPath),
                         isUpdating = isUpdatingYtDlp,
+                        isApplyingAppUpdate = isApplyingAppUpdate,
+                        appUpdateProgress = appUpdateProgress,
+                        appUpdateStage = appUpdateStage,
                         port = port,
                         saveDir = saveDir,
                         isSaveDirConfigured = isCustomSaveDirConfigured
@@ -1169,6 +1313,18 @@ namespace TurboDownloader
                 else if ((rawUrl == "/api/v1/system/check-update" || rawUrl.StartsWith("/api/v1/system/check-update?")) && (req.HttpMethod == "GET" || req.HttpMethod == "POST"))
                 {
                     HandleCheckUpdate(res);
+                }
+                else if (rawUrl == "/api/v1/system/update-status" && req.HttpMethod == "GET")
+                {
+                    SendJson(res, new {
+                        success = true,
+                        isUpdating = isApplyingAppUpdate,
+                        progress = appUpdateProgress,
+                        stage = appUpdateStage,
+                        error = appUpdateError,
+                        currentVersion = GetLocalAppVersion()
+                    });
+                    return;
                 }
                 else if (rawUrl == "/api/v1/system/apply-update" && req.HttpMethod == "POST")
                 {
@@ -2464,6 +2620,64 @@ namespace TurboDownloader
             SendJson(res, new { success = true, launched = launched });
         }
 
+        private static string GetLocalAppVersion()
+        {
+            try
+            {
+                string vPath = GetWebFilePath("version.json");
+                if (File.Exists(vPath))
+                {
+                    string vText = File.ReadAllText(vPath, Encoding.UTF8);
+                    Dictionary<string, object> d = json.Deserialize<Dictionary<string, object>>(vText);
+                    if (d != null && d.ContainsKey("version"))
+                    {
+                        string diskVer = Convert.ToString(d["version"]).Trim();
+                        if (!string.IsNullOrEmpty(diskVer) && IsNewerVersion(diskVer, APP_VERSION))
+                        {
+                            return diskVer;
+                        }
+                    }
+                }
+            }
+            catch { }
+            return APP_VERSION;
+        }
+
+        private static string ComputeNormalizedTextHash(string text)
+        {
+            if (string.IsNullOrEmpty(text)) return "";
+            try
+            {
+                string norm = text.Replace("\r\n", "\n").Replace("\r", "\n").Trim();
+                using (var sha = System.Security.Cryptography.SHA256.Create())
+                {
+                    byte[] bytes = Encoding.UTF8.GetBytes(norm);
+                    byte[] hash = sha.ComputeHash(bytes);
+                    StringBuilder sb = new StringBuilder();
+                    for (int i = 0; i < 6; i++) sb.Append(hash[i].ToString("x2"));
+                    return sb.ToString();
+                }
+            }
+            catch
+            {
+                return "";
+            }
+        }
+
+        private static string ComputeNormalizedFileHash(string path)
+        {
+            try
+            {
+                if (!string.IsNullOrEmpty(path) && File.Exists(path))
+                {
+                    string content = File.ReadAllText(path, Encoding.UTF8);
+                    return ComputeNormalizedTextHash(content);
+                }
+            }
+            catch { }
+            return "";
+        }
+
         private static bool IsNewerVersion(string remoteVer, string localVer)
         {
             if (string.IsNullOrEmpty(remoteVer) || string.IsNullOrEmpty(localVer)) return false;
@@ -2490,10 +2704,15 @@ namespace TurboDownloader
         {
             try
             {
+                string localVer = GetLocalAppVersion();
+                ServicePointManager.SecurityProtocol = (SecurityProtocolType)3072 | (SecurityProtocolType)768 | SecurityProtocolType.Tls;
+
                 string remoteJsonStr = null;
+                long ts = DateTime.UtcNow.Ticks;
                 string[] candidateUrls = new string[] {
-                    GITHUB_VERSION_URL + "?_ts=" + DateTime.UtcNow.Ticks,
-                    GITHUB_PAGES_VERSION_URL + "?_ts=" + DateTime.UtcNow.Ticks
+                    GITHUB_VERSION_URL + "?_ts=" + ts,
+                    GITHUB_ROOT_VERSION_URL + "?_ts=" + ts,
+                    GITHUB_PAGES_VERSION_URL + "?_ts=" + ts
                 };
 
                 foreach (string url in candidateUrls)
@@ -2502,7 +2721,8 @@ namespace TurboDownloader
                     {
                         using (WebClient wc = new WebClient())
                         {
-                            wc.Headers.Add("User-Agent", "180HzDownloader/" + APP_VERSION);
+                            wc.Encoding = Encoding.UTF8;
+                            wc.Headers.Add("User-Agent", "180HzDownloader/" + localVer);
                             wc.Headers.Add("Cache-Control", "no-cache");
                             remoteJsonStr = wc.DownloadString(url);
                             if (!string.IsNullOrEmpty(remoteJsonStr)) break;
@@ -2516,24 +2736,61 @@ namespace TurboDownloader
                     SendJson(res, new {
                         success = true,
                         hasUpdate = false,
-                        currentVersion = APP_VERSION,
-                        latestVersion = APP_VERSION,
+                        currentVersion = localVer,
+                        latestVersion = localVer,
                         message = "Unable to reach GitHub update server."
                     });
                     return;
                 }
 
                 Dictionary<string, object> dict = json.Deserialize<Dictionary<string, object>>(remoteJsonStr);
-                string latestVer = dict.ContainsKey("version") ? dict["version"].ToString() : APP_VERSION;
+                string latestVer = dict.ContainsKey("version") ? dict["version"].ToString() : localVer;
                 string downloadUrl = dict.ContainsKey("downloadUrl") ? dict["downloadUrl"].ToString() : GITHUB_SETUP_DOWNLOAD_URL;
                 string changelog = dict.ContainsKey("changelog") ? dict["changelog"].ToString() : "";
-                bool hasUpdate = IsNewerVersion(latestVer, APP_VERSION);
+                bool versionNewer = IsNewerVersion(latestVer, localVer);
+
+                // Also compare live normalized hash of web/app.js and web/index.html on GitHub so any code push is detected 100%
+                string localAppHash = ComputeNormalizedFileHash(GetWebFilePath("app.js"));
+                string localHtmlHash = ComputeNormalizedFileHash(GetWebFilePath("index.html"));
+                string localCombinedHash = (!string.IsNullOrEmpty(localAppHash) && !string.IsNullOrEmpty(localHtmlHash))
+                    ? (localAppHash.Substring(0, 6) + localHtmlHash.Substring(0, 6))
+                    : localAppHash;
+
+                string remoteCombinedHash = "";
+                try
+                {
+                    using (WebClient wc = new WebClient())
+                    {
+                        wc.Encoding = Encoding.UTF8;
+                        wc.Headers.Add("User-Agent", "180HzDownloader/" + localVer);
+                        wc.Headers.Add("Cache-Control", "no-cache");
+                        string remoteAppJs = wc.DownloadString(GITHUB_RAW_BASE_URL + "/web/app.js?_ts=" + ts);
+                        string remoteHtml = wc.DownloadString(GITHUB_RAW_BASE_URL + "/web/index.html?_ts=" + ts);
+                        string rAppH = ComputeNormalizedTextHash(remoteAppJs);
+                        string rHtmlH = ComputeNormalizedTextHash(remoteHtml);
+                        if (!string.IsNullOrEmpty(rAppH) && !string.IsNullOrEmpty(rHtmlH))
+                        {
+                            remoteCombinedHash = rAppH.Substring(0, 6) + rHtmlH.Substring(0, 6);
+                        }
+                    }
+                }
+                catch { }
+
+                bool buildChanged = (!string.IsNullOrEmpty(localCombinedHash) &&
+                                     !string.IsNullOrEmpty(remoteCombinedHash) &&
+                                     !string.Equals(localCombinedHash, remoteCombinedHash, StringComparison.OrdinalIgnoreCase));
+
+                bool hasUpdate = versionNewer || buildChanged;
 
                 SendJson(res, new {
                     success = true,
                     hasUpdate = hasUpdate,
-                    currentVersion = APP_VERSION,
+                    versionNewer = versionNewer,
+                    buildChanged = buildChanged,
+                    currentVersion = localVer,
                     latestVersion = latestVer,
+                    localHash = localCombinedHash,
+                    remoteHash = remoteCombinedHash,
                     downloadUrl = downloadUrl,
                     githubUrl = GITHUB_REPO_URL,
                     changelog = changelog
@@ -2544,9 +2801,33 @@ namespace TurboDownloader
                 SendJson(res, new {
                     success = false,
                     hasUpdate = false,
-                    currentVersion = APP_VERSION,
+                    currentVersion = GetLocalAppVersion(),
                     error = ex.Message
                 });
+            }
+        }
+
+        private static bool ReplaceExecutableAtomically(string sourceExe, string targetExe)
+        {
+            if (string.IsNullOrEmpty(sourceExe) || !File.Exists(sourceExe) || string.IsNullOrEmpty(targetExe)) return false;
+            try
+            {
+                string dir = Path.GetDirectoryName(targetExe);
+                if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir)) Directory.CreateDirectory(dir);
+
+                if (File.Exists(targetExe))
+                {
+                    string oldBackup = targetExe + ".old";
+                    try { if (File.Exists(oldBackup)) File.Delete(oldBackup); } catch { }
+                    try { File.Move(targetExe, oldBackup); } catch { }
+                }
+
+                File.Copy(sourceExe, targetExe, true);
+                return File.Exists(targetExe);
+            }
+            catch
+            {
+                return false;
             }
         }
 
@@ -2554,67 +2835,191 @@ namespace TurboDownloader
         {
             try
             {
-                string tempInstaller = Path.Combine(Path.GetTempPath(), "180Hz_Downloader_Update.exe");
-                if (File.Exists(tempInstaller)) { try { File.Delete(tempInstaller); } catch { } }
-
-                string[] downloadCandidates = new string[] {
-                    GITHUB_SETUP_DOWNLOAD_URL,
-                    "https://github.com/tanjeem180hz/180hz_video-downloader/raw/main/180Hz%20Downloader%20Setup.exe"
-                };
-
-                bool downloaded = false;
-                foreach (string dUrl in downloadCandidates)
-                {
-                    try
-                    {
-                        ServicePointManager.SecurityProtocol = (SecurityProtocolType)3072 | (SecurityProtocolType)768 | SecurityProtocolType.Tls;
-                        using (WebClient wc = new WebClient())
-                        {
-                            wc.Headers.Add("User-Agent", "180HzDownloader/" + APP_VERSION);
-                            wc.DownloadFile(dUrl, tempInstaller);
-                            if (File.Exists(tempInstaller) && new FileInfo(tempInstaller).Length > 50000)
-                            {
-                                downloaded = true;
-                                break;
-                            }
-                        }
-                    }
-                    catch { }
-                }
-
-                if (!downloaded)
+                if (isApplyingAppUpdate)
                 {
                     SendJson(res, new {
-                        success = false,
-                        message = "Failed to download update installer from GitHub."
+                        success = true,
+                        started = true,
+                        progress = appUpdateProgress,
+                        stage = appUpdateStage,
+                        message = "Update is already in progress."
                     });
                     return;
                 }
 
+                isApplyingAppUpdate = true;
+                appUpdateProgress = 12;
+                appUpdateError = "";
+                appUpdateStage = "Connecting to GitHub Live Release Server...";
+
                 SendJson(res, new {
                     success = true,
-                    message = "Update installer downloaded. Launching update and restarting..."
+                    started = true,
+                    progress = appUpdateProgress,
+                    stage = appUpdateStage,
+                    message = "Automatic update started."
                 });
 
                 Task.Factory.StartNew(() =>
                 {
-                    Thread.Sleep(700);
                     try
                     {
-                        ProcessStartInfo psi = new ProcessStartInfo();
-                        psi.FileName = tempInstaller;
-                        psi.UseShellExecute = true;
-                        Process.Start(psi);
-                    }
-                    catch { }
+                        ServicePointManager.SecurityProtocol = (SecurityProtocolType)3072 | (SecurityProtocolType)768 | SecurityProtocolType.Tls;
+                        long ts = DateTime.UtcNow.Ticks;
 
-                    Thread.Sleep(500);
-                    CleanUp();
-                    Environment.Exit(0);
+                        string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+                        string installDir = Path.Combine(localAppData, "Programs", "180Hz Downloader");
+                        try { if (!Directory.Exists(installDir)) Directory.CreateDirectory(installDir); } catch { }
+
+                        string[] webTextFiles = new string[] { "index.html", "styles.css", "app.js", "version.json" };
+                        appUpdateProgress = 35;
+                        appUpdateStage = "Downloading latest Web UI & Configuration from GitHub...";
+
+                        foreach (string wf in webTextFiles)
+                        {
+                            try
+                            {
+                                using (WebClient wc = new WebClient())
+                                {
+                                    wc.Encoding = Encoding.UTF8;
+                                    wc.Headers.Add("User-Agent", "180HzDownloader/" + APP_VERSION);
+                                    wc.Headers.Add("Cache-Control", "no-cache");
+                                    byte[] rawBytes = wc.DownloadData(GITHUB_RAW_BASE_URL + "/web/" + wf + "?_ts=" + ts);
+                                    if (rawBytes != null && rawBytes.Length > 20)
+                                    {
+                                        string[] targetDirs = new string[] {
+                                            Path.Combine(appDir, "web"),
+                                            Path.Combine(installDir, "web"),
+                                            Path.Combine(appDir, "docs")
+                                        };
+                                        foreach (string td in targetDirs)
+                                        {
+                                            try
+                                            {
+                                                if (td.EndsWith("docs") && !Directory.Exists(td)) continue;
+                                                if (!Directory.Exists(td)) Directory.CreateDirectory(td);
+                                                File.WriteAllBytes(Path.Combine(td, wf), rawBytes);
+                                            }
+                                            catch { }
+                                        }
+                                        if (wf == "version.json")
+                                        {
+                                            try { File.WriteAllBytes(Path.Combine(appDir, "version.json"), rawBytes); } catch { }
+                                            try { File.WriteAllBytes(Path.Combine(installDir, "version.json"), rawBytes); } catch { }
+                                        }
+                                    }
+                                }
+                            }
+                            catch { }
+                        }
+
+                        // Also sync click.mp3 if available
+                        try
+                        {
+                            using (WebClient wc = new WebClient())
+                            {
+                                wc.Headers.Add("User-Agent", "180HzDownloader/" + APP_VERSION);
+                                byte[] mp3Bytes = wc.DownloadData(GITHUB_RAW_BASE_URL + "/web/click.mp3?_ts=" + ts);
+                                if (mp3Bytes != null && mp3Bytes.Length > 500)
+                                {
+                                    try { File.WriteAllBytes(Path.Combine(appDir, "web", "click.mp3"), mp3Bytes); } catch { }
+                                    try { File.WriteAllBytes(Path.Combine(installDir, "web", "click.mp3"), mp3Bytes); } catch { }
+                                }
+                            }
+                        }
+                        catch { }
+
+                        appUpdateProgress = 65;
+                        appUpdateStage = "Downloading latest 180Hz Engine binary from GitHub...";
+
+                        string tempInstaller = Path.Combine(Path.GetTempPath(), "180Hz_Downloader_Update.exe");
+                        if (File.Exists(tempInstaller)) { try { File.Delete(tempInstaller); } catch { } }
+
+                        string[] downloadCandidates = new string[] {
+                            GITHUB_SETUP_DOWNLOAD_URL + "?_ts=" + ts,
+                            GITHUB_RAW_BASE_URL + "/180Hz%20Downloader.exe?_ts=" + ts,
+                            "https://github.com/tanjeem180hz/180hz_video-downloader/raw/main/180Hz%20Downloader%20Setup.exe"
+                        };
+
+                        bool downloadedExe = false;
+                        foreach (string dUrl in downloadCandidates)
+                        {
+                            try
+                            {
+                                using (WebClient wc = new WebClient())
+                                {
+                                    wc.Headers.Add("User-Agent", "180HzDownloader/" + APP_VERSION);
+                                    wc.DownloadFile(dUrl, tempInstaller);
+                                    if (File.Exists(tempInstaller) && new FileInfo(tempInstaller).Length > 40000)
+                                    {
+                                        downloadedExe = true;
+                                        break;
+                                    }
+                                }
+                            }
+                            catch { }
+                        }
+
+                        appUpdateProgress = 85;
+                        appUpdateStage = "Installing update & syncing core dependencies...";
+
+                        CheckUpdateYtDlp();
+
+                        string currentExe = Application.ExecutablePath;
+                        string installedExe = Path.Combine(installDir, "180Hz Downloader.exe");
+                        bool replacedInPlace = false;
+
+                        if (downloadedExe && File.Exists(tempInstaller))
+                        {
+                            bool r1 = ReplaceExecutableAtomically(tempInstaller, installedExe);
+                            bool r2 = ReplaceExecutableAtomically(tempInstaller, currentExe);
+                            replacedInPlace = r1 || r2;
+                        }
+
+                        appUpdateProgress = 96;
+                        appUpdateStage = "Restarting 180Hz Engine...";
+                        Thread.Sleep(700);
+
+                        try
+                        {
+                            if (replacedInPlace || !downloadedExe)
+                            {
+                                string targetToStart = File.Exists(currentExe) ? currentExe : installedExe;
+                                ProcessStartInfo psi = new ProcessStartInfo();
+                                psi.FileName = targetToStart;
+                                psi.WorkingDirectory = Path.GetDirectoryName(targetToStart) ?? appDir;
+                                psi.Arguments = "--restarted-from-update";
+                                psi.UseShellExecute = true;
+                                CleanUp();
+                                Process.Start(psi);
+                            }
+                            else if (File.Exists(tempInstaller))
+                            {
+                                ProcessStartInfo psi = new ProcessStartInfo();
+                                psi.FileName = tempInstaller;
+                                psi.Arguments = "--apply-update \"" + currentExe + "\"";
+                                psi.UseShellExecute = true;
+                                CleanUp();
+                                Process.Start(psi);
+                            }
+                        }
+                        catch { }
+
+                        Thread.Sleep(250);
+                        CleanUp();
+                        Environment.Exit(0);
+                    }
+                    catch (Exception ex)
+                    {
+                        isApplyingAppUpdate = false;
+                        appUpdateError = ex.Message;
+                        appUpdateStage = "Update failed: " + ex.Message;
+                    }
                 });
             }
             catch (Exception ex)
             {
+                isApplyingAppUpdate = false;
                 SendJson(res, new {
                     success = false,
                     message = ex.Message
