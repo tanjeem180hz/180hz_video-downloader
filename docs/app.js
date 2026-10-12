@@ -416,19 +416,30 @@ async function triggerSaveAs(url, filename) {
   const pasteBtn = $("#pasteBtn");
   if (!form) return;
 
-  function updateClearBtn() {
-    if (!clearBtn) return;
-    if (input.value && input.value.trim().length > 0) {
-      clearBtn.classList.remove("hidden");
-    } else {
-      clearBtn.classList.add("hidden");
+  function updateInputUi() {
+    const val = input && input.value ? input.value.trim() : "";
+    if (clearBtn) {
+      if (val.length > 0) clearBtn.classList.remove("hidden");
+      else clearBtn.classList.add("hidden");
+    }
+    if (btn) {
+      if (val.length > 0) btn.classList.add("ready");
+      else btn.classList.remove("ready");
+    }
+  }
+
+  function highlightAnalyzeReady() {
+    updateInputUi();
+    if (btn) {
+      btn.classList.add("pulse-ready");
+      setTimeout(() => btn.classList.remove("pulse-ready"), 1600);
     }
   }
 
   if (clearBtn) {
     clearBtn.addEventListener("click", () => {
       input.value = "";
-      updateClearBtn();
+      updateInputUi();
       input.focus();
       zone.innerHTML = "";
     });
@@ -441,8 +452,9 @@ async function triggerSaveAs(url, filename) {
           const text = await navigator.clipboard.readText();
           if (text && text.trim()) {
             input.value = text.trim();
-            updateClearBtn();
-            analyze(input.value);
+            updateInputUi();
+            input.focus();
+            highlightAnalyzeReady();
             return;
           }
         }
@@ -452,9 +464,9 @@ async function triggerSaveAs(url, filename) {
     });
   }
 
-  input.addEventListener("input", updateClearBtn);
-  input.addEventListener("change", updateClearBtn);
-  input.addEventListener("keyup", updateClearBtn);
+  input.addEventListener("input", updateInputUi);
+  input.addEventListener("change", updateInputUi);
+  input.addEventListener("keyup", updateInputUi);
 
   let probing = false;
   let stepTimers = [];
@@ -788,7 +800,7 @@ async function triggerSaveAs(url, filename) {
 
   async function analyzeViaBackend(url, provider) {
     const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 12000);
+    const timer = setTimeout(() => ctrl.abort(), 25000);
     try {
       const res = await fetch(`${BACKEND_API_BASE}/media/analyze`, {
         method: "POST",
@@ -1887,34 +1899,65 @@ async function triggerSaveAs(url, filename) {
   }
 
   async function analyze(raw) {
-    const clean = String(raw || "").trim();
-    if (!clean || probing) return;
+    let clean = String(raw || (input ? input.value : "") || "").trim();
+    if (!clean) {
+      if (input) {
+        input.focus();
+        input.classList.add("input-shake");
+        setTimeout(() => input.classList.remove("input-shake"), 500);
+      }
+      showError("Please paste a YouTube, Facebook, or Instagram video link first.", {
+        title: "No Link Provided",
+        code: "EMPTY_INPUT"
+      });
+      return;
+    }
+
+    if (probing) return;
+
+    // Smart URL extraction & protocol normalization
+    const extracted = clean.match(/https?:\/\/[^\s"']+/i);
+    if (extracted) {
+      clean = extracted[0];
+    } else if (!/^https?:\/\//i.test(clean)) {
+      if (/^(www\.|youtube\.com|youtu\.be|instagram\.com|facebook\.com|fb\.watch)/i.test(clean)) {
+        clean = "https://" + clean;
+      }
+    }
+
     const u = parseUrl(clean);
     zone.innerHTML = "";
     if (!u) {
-      showError("That doesn't look like a valid http(s) URL.");
+      if (input) {
+        input.focus();
+        input.classList.add("input-shake");
+        setTimeout(() => input.classList.remove("input-shake"), 500);
+      }
+      showError("Please enter a valid link from YouTube, Facebook, or Instagram.", {
+        title: "Invalid Link Format",
+        code: "INVALID_URL",
+        url: clean
+      });
       return;
     }
+
+    if (input) input.value = clean;
+    updateInputUi();
+
     probing = true;
     btn.disabled = true;
     btn.classList.add("busy");
-    label.textContent = "Scanning";
+    btn.classList.remove("ready");
+    label.textContent = "Analyzing…";
     startSteps();
     const t0 = Date.now();
     try {
       let result;
       const kind = classify(u);
-      if (kind === "youtube" || kind === "instagram" || kind === "facebook" || kind === "tiktok" || kind === "twitter" || kind === "reddit") {
-        const prov = kind.charAt(0).toUpperCase() + kind.slice(1);
-        result = await analyzeViaBackend(clean, prov);
-      } else if (kind === "vimeo") {
-        result = await oembed(clean, "https://vimeo.com/api/oembed.json?url=", "Vimeo");
-      } else {
-        const resolved = resolveDirect(u);
-        result = await probeDirect(resolved.url, clean);
-        result.provider = resolved.provider;
-      }
-      await new Promise((r) => setTimeout(r, Math.max(0, 1400 - (Date.now() - t0))));
+      const prov = kind.charAt(0).toUpperCase() + kind.slice(1);
+      result = await analyzeViaBackend(clean, prov);
+
+      await new Promise((r) => setTimeout(r, Math.max(0, 150 - (Date.now() - t0))));
       Ledger.add({
         url: clean, kind: result.kind, provider: result.provider,
         title: result.title || result.filename || null,
@@ -1935,31 +1978,32 @@ async function triggerSaveAs(url, filename) {
       btn.disabled = false;
       btn.classList.remove("busy");
       label.textContent = "Analyze";
+      updateInputUi();
     }
   }
 
   form.addEventListener("submit", (e) => {
     e.preventDefault();
-    analyze(input.value);
+    analyze(input ? input.value : "");
   });
 
-  /* sample feeds */
-  $$("[data-sample]").forEach((c) =>
-    c.addEventListener("click", () => {
-      input.value = c.dataset.sample;
-      updateClearBtn();
-      analyze(c.dataset.sample);
-    })
-  );
+  if (btn) {
+    btn.addEventListener("click", (e) => {
+      e.preventDefault();
+      analyze(input ? input.value : "");
+    });
+  }
 
-  /* paste anywhere → capture & go */
+  /* paste anywhere → capture to input box ONLY (manual analyze) */
   addEventListener("paste", (e) => {
+    if (document.activeElement === input) return;
     const text = (e.clipboardData || window.clipboardData).getData("text").trim();
-    if (/^https?:\/\/\S+$/i.test(text) && document.activeElement !== input) {
+    if (/^https?:\/\/\S+$/i.test(text) || /(?:youtube\.com|youtu\.be|instagram\.com|facebook\.com|fb\.watch)/i.test(text)) {
       input.value = text;
-      updateClearBtn();
+      updateInputUi();
       input.focus();
-      analyze(text);
+      highlightAnalyzeReady();
+      // Manual only: user must click Analyze
     }
   });
 
@@ -1974,14 +2018,15 @@ async function triggerSaveAs(url, filename) {
 
   Ledger.render();
 
-  /* auto-analyze url param (e.g. ?url=...) */
+  /* populate url param (e.g. ?url=...) without auto-analyzing */
   try {
     const params = new URLSearchParams(window.location.search);
     const initialUrl = params.get("url");
     if (initialUrl && initialUrl.trim()) {
       input.value = initialUrl.trim();
-      updateClearBtn();
-      setTimeout(() => analyze(initialUrl.trim()), 300);
+      updateInputUi();
+      highlightAnalyzeReady();
+      // Manual only: user must click Analyze
     }
   } catch {}
 })();

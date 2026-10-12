@@ -944,7 +944,7 @@ namespace TurboDownloader
 
             ProcessStartInfo psi = new ProcessStartInfo();
             psi.FileName = ytdlp;
-            psi.Arguments = string.Format("{0} {1} {2} --dump-json --no-playlist \"{3}\"", jsRuntimeArg, extArgs, cookiesArg, safeUrl);
+            psi.Arguments = string.Format("{0} {1} {2} --dump-json --no-playlist --no-warnings --socket-timeout 15 \"{3}\"", jsRuntimeArg, extArgs, cookiesArg, safeUrl);
             psi.CreateNoWindow = true;
             psi.UseShellExecute = false;
             psi.RedirectStandardOutput = true;
@@ -955,9 +955,16 @@ namespace TurboDownloader
             {
                 using (Process p = Process.Start(psi))
                 {
-                    string output = p.StandardOutput.ReadToEnd();
-                    string err = p.StandardError.ReadToEnd();
-                    p.WaitForExit(20000);
+                    Task<string> outTask = Task.Factory.StartNew(() => p.StandardOutput.ReadToEnd());
+                    Task<string> errTask = Task.Factory.StartNew(() => p.StandardError.ReadToEnd());
+                    if (!p.WaitForExit(25000))
+                    {
+                        try { p.Kill(); } catch { }
+                    }
+                    string output = "";
+                    try { output = outTask.Wait(4000) ? outTask.Result : ""; } catch { }
+                    string err = "";
+                    try { err = errTask.Wait(1000) ? errTask.Result : ""; } catch { }
 
                     if (string.IsNullOrEmpty(output))
                     {
