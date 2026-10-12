@@ -322,11 +322,17 @@ const Ledger = {
     const body = $("#ledgerBody");
     if (!body) return;
     const items = Ledger.all();
+    const clearBtn = $("#clearLedgerBtn");
+    if (clearBtn) {
+      clearBtn.style.display = items.length ? "inline-flex" : "none";
+    }
     if (!items.length) {
       body.innerHTML = `<div class="empty">${IC.search}Ledger empty — feed the engine its first link</div>`;
       return;
     }
     const icons = { video: IC.film, audio: IC.audio, file: IC.file, embed: IC.globe };
+    const extLinkIco = `<svg viewBox="0 0 24 24" class="ico" style="width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>`;
+
     body.innerHTML = items.map((j, i) => `
       <div class="row-item" style="animation-delay:${i * 0.05}s">
         <div class="row-ico">${icons[j.kind] || IC.file}</div>
@@ -335,10 +341,19 @@ const Ledger = {
           <div class="row-sub">${escapeHtml(j.provider || "")}${j.ct ? " • " + escapeHtml(j.ct) : ""}</div>
         </div>
         <div class="row-size">${humanBytes(j.size)}</div>
-        ${j.kind !== "embed" ? `<button class="row-dl" data-re-dl="${encodeURIComponent(j.url)}" data-name="${escapeHtml(j.title || "")}" title="Pull again">${IC.dl}</button>` : ""}
+        <div class="row-actions">
+          ${j.kind !== "embed" ? `<button type="button" class="row-action-btn row-dl" data-re-dl="${encodeURIComponent(j.url)}" data-name="${escapeHtml(j.title || "")}" title="Analyze & Direct Download">${IC.dl}</button>` : ""}
+          <a href="${escapeHtml(j.url)}" target="_blank" rel="noopener noreferrer" class="row-action-btn row-link" data-open-external="${encodeURIComponent(j.url)}" title="Open original video link in browser">${extLinkIco}</a>
+        </div>
         <span class="tag ${j.status === "downloaded" ? "done" : ""}">${j.status}</span>
         <span class="row-time">${relTime(j.t)}</span>
       </div>`).join("");
+  },
+  clear() {
+    try {
+      localStorage.removeItem(LKEY);
+    } catch {}
+    Ledger.render();
   },
 };
 function escapeHtml(s) {
@@ -2007,14 +2022,65 @@ async function triggerSaveAs(url, filename) {
     }
   });
 
-  /* ledger quick re-download */
+  /* ledger re-download -> populate URL input & analyze directly to download options */
   document.addEventListener("click", (e) => {
     const b = e.target.closest("[data-re-dl]");
     if (!b) return;
-    const resolved = resolveDirect(parseUrl(decodeURIComponent(b.dataset.reDl)));
-    nativeHandoff(resolved.url, b.dataset.name || undefined);
-    Ledger.bump(decodeURIComponent(b.dataset.reDl));
+    const targetUrl = decodeURIComponent(b.dataset.reDl || "");
+    if (!targetUrl) return;
+
+    // Ensure lamp is turned on if still off
+    if (document.body.classList.contains("lamp-off")) {
+      document.documentElement.classList.remove("lamp-off");
+      document.body.classList.remove("lamp-off");
+      document.body.classList.add("lamp-on");
+    }
+
+    // Populate URL input
+    if (input) {
+      input.value = targetUrl;
+      updateInputUi();
+    }
+
+    // Smooth scroll to console area so user sees the analysis & options
+    const consoleSec = document.getElementById("console");
+    if (consoleSec) {
+      consoleSec.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+
+    // Trigger analysis immediately to reveal all download options
+    analyze(targetUrl);
+    Ledger.bump(targetUrl);
   });
+
+  /* ledger open external video link */
+  document.addEventListener("click", (e) => {
+    const linkBtn = e.target.closest("[data-open-external]");
+    if (!linkBtn) return;
+    const url = decodeURIComponent(linkBtn.dataset.openExternal || linkBtn.href || "");
+    if (!url) return;
+
+    const isLocalApp = (typeof location !== "undefined" && (location.port === "4000" || location.hostname === "127.0.0.1" || location.hostname === "localhost"));
+    if (isLocalApp) {
+      e.preventDefault();
+      fetch(`${BACKEND_API_BASE}/system/open-url`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url })
+      }).catch(() => {
+        window.open(url, "_blank");
+      });
+    }
+  });
+
+  /* ledger clear history */
+  const clearLedgerBtn = document.getElementById("clearLedgerBtn");
+  if (clearLedgerBtn) {
+    clearLedgerBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      Ledger.clear();
+    });
+  }
 
   Ledger.render();
 
