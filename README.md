@@ -1,6 +1,6 @@
 <p align="center">
   <a href="https://tanjeem180hz.github.io/180hz_video-downloader/">
-    <img src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=800&size=26&pause=1000&color=D8FF3E&center=true&vCenter=true&random=false&width=620&height=70&lines=%E2%9A%A1+180HZ+DOWNLOADER+2.0+%7C+PEAK+8K;%F0%9F%8E%AC+Bit-Exact+4K+%26+8K+Lossless+Video;%F0%9F%8E%B5+320+kbps+Studio+MP3+Audio+Pipeline;%F0%9F%9A%80+Universal+YouTube%2C+Insta%2C+FB%2C+TikTok;%F0%9F%9B%A1%EF%B8%8F+1-Click+Installer+%E2%80%94+Auto+FFmpeg+%26+yt-dlp" alt="180Hz Downloader Typist Animation" />
+    <img src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=800&size=26&pause=1000&color=D8FF3E&center=true&vCenter=true&random=false&width=620&height=70&lines=%E2%9A%A1+180HZ+DOWNLOADER+2.0+%7C+PEAK+8K;%F0%9F%8E%AC+Bit-Exact+4K+%26+8K+Lossless+Video;%F0%9F%8E%B5+320+kbps+Studio+MP3+Audio+Pipeline;%F0%9F%9A%80+Controlled+YouTube%2C+Instagram%2C+Facebook;%F0%9F%9B%A1%EF%B8%8F+1-Click+Installer+%E2%80%94+Auto+FFmpeg+%26+yt-dlp" alt="180Hz Downloader Typist Animation" />
   </a>
 </p>
 
@@ -70,9 +70,6 @@ Launch the official interactive web downloader in your browser right now:
 | **YouTube** | Videos, Shorts, Playlists, Live VODs | **8K (4320p)**, 4K (2160p), 1440p, 1080p 60fps | 320 kbps MP3, M4A, Opus |
 | **Instagram** | Reels, Posts, Stories, IGTV | **1080p Full HD** Original Video | 320 kbps MP3, Source AAC |
 | **Facebook** | HD Videos, Reels, Watch, Live Archive | **HD 1080p** / SD | 320 kbps MP3, M4A |
-| **TikTok** | Videos without Watermark | **Original 1080p** | 320 kbps MP3 |
-| **Twitter / X** | Video Clips, Gifs | **1080p / 720p** | 320 kbps MP3 |
-| **BDIX & Direct** | FTP files, MP4, MKV, ISO, ZIP | **Uncapped Multi-socket (300+ Mbps)** | Direct bit-exact |
 
 ---
 
