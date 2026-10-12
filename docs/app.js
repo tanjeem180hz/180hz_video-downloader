@@ -2042,39 +2042,79 @@ async function triggerSaveAs(url, filename) {
         const AudioCtx = window.AudioContext || window.webkitAudioContext;
         if (!AudioCtx) return;
         const ctx = new AudioCtx();
+        if (ctx.state === "suspended") {
+          ctx.resume().catch(() => {});
+        }
         const now = ctx.currentTime;
 
-        // Primary mechanical switch snap
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.type = "triangle";
-        osc.frequency.setValueAtTime(on ? 1750 : 1250, now);
-        osc.frequency.exponentialRampToValueAtTime(70, now + 0.045);
+        // 1. Tactile Impact Transient (Crisp filtered mechanical friction snap)
+        const noiseDuration = 0.015;
+        const sampleRate = ctx.sampleRate || 44100;
+        const frameCount = Math.floor(sampleRate * noiseDuration);
+        const noiseBuffer = ctx.createBuffer(1, frameCount, sampleRate);
+        const channelData = noiseBuffer.getChannelData(0);
+        for (let i = 0; i < frameCount; i++) {
+          channelData[i] = (Math.random() * 2 - 1) * (1 - i / frameCount);
+        }
 
-        gain.gain.setValueAtTime(0.28, now);
-        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.045);
+        const noiseSource = ctx.createBufferSource();
+        noiseSource.buffer = noiseBuffer;
 
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.start(now);
-        osc.stop(now + 0.045);
+        const noiseFilter = ctx.createBiquadFilter();
+        noiseFilter.type = "bandpass";
+        noiseFilter.frequency.setValueAtTime(on ? 2800 : 2200, now);
+        noiseFilter.Q.setValueAtTime(2.0, now);
 
-        // Rebound chain resonance click
+        const noiseGain = ctx.createGain();
+        noiseGain.gain.setValueAtTime(0.38, now);
+        noiseGain.gain.exponentialRampToValueAtTime(0.001, now + noiseDuration);
+
+        noiseSource.connect(noiseFilter);
+        noiseFilter.connect(noiseGain);
+        noiseGain.connect(ctx.destination);
+        noiseSource.start(now);
+
+        // 2. Solid Body Thud (Realistic acoustic mechanical switch body)
+        const bodyOsc = ctx.createOscillator();
+        const bodyGain = ctx.createGain();
+        bodyOsc.type = "sine";
+        const startFreq = on ? 440 : 360;
+        const endFreq = on ? 110 : 85;
+        bodyOsc.frequency.setValueAtTime(startFreq, now);
+        bodyOsc.frequency.exponentialRampToValueAtTime(endFreq, now + 0.035);
+
+        bodyGain.gain.setValueAtTime(0.26, now);
+        bodyGain.gain.exponentialRampToValueAtTime(0.001, now + 0.035);
+
+        bodyOsc.connect(bodyGain);
+        bodyGain.connect(ctx.destination);
+        bodyOsc.start(now);
+        bodyOsc.stop(now + 0.038);
+
+        // 3. Tactile Mechanical Latch Rebound (Detent settlement ~22ms later)
+        const reboundTime = now + 0.022;
+        const reboundOsc = ctx.createOscillator();
+        const reboundGain = ctx.createGain();
+        reboundOsc.type = "sine";
+        reboundOsc.frequency.setValueAtTime(on ? 680 : 540, reboundTime);
+        reboundOsc.frequency.exponentialRampToValueAtTime(130, reboundTime + 0.018);
+
+        reboundGain.gain.setValueAtTime(0.08, reboundTime);
+        reboundGain.gain.exponentialRampToValueAtTime(0.001, reboundTime + 0.018);
+
+        reboundOsc.connect(reboundGain);
+        reboundGain.connect(ctx.destination);
+        reboundOsc.start(reboundTime);
+        reboundOsc.stop(reboundTime + 0.022);
+
+        // Clean up AudioContext lifecycle to prevent audio device leaks
         setTimeout(() => {
           try {
-            const osc2 = ctx.createOscillator();
-            const gain2 = ctx.createGain();
-            osc2.type = "sine";
-            osc2.frequency.setValueAtTime(on ? 2400 : 1900, ctx.currentTime);
-            osc2.frequency.exponentialRampToValueAtTime(250, ctx.currentTime + 0.04);
-            gain2.gain.setValueAtTime(0.12, ctx.currentTime);
-            gain2.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.04);
-            osc2.connect(gain2);
-            gain2.connect(ctx.destination);
-            osc2.start(ctx.currentTime);
-            osc2.stop(ctx.currentTime + 0.04);
-          } catch {}
-        }, 35);
+            if (ctx.state !== "closed") {
+              ctx.close().catch(() => {});
+            }
+          } catch (e) {}
+        }, 150);
       } catch {}
     }
 
