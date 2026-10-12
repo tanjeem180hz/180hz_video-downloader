@@ -56,7 +56,6 @@ body {
   -webkit-mask-image: radial-gradient(ellipse 90% 70% at 50% 0%, black 30%, transparent 78%);
           mask-image: radial-gradient(ellipse 90% 70% at 50% 0%, black 30%, transparent 78%);
 }
-#field { position: fixed; inset: 0; z-index: 6; opacity: 0; pointer-events: none; }
 
 /* ---------- cursor ---------- */
 .cur-dot, .cur-ring { position: fixed; top: 0; left: 0; z-index: 90; pointer-events: none; border-radius: 50%; mix-blend-mode: difference; display: none; }
@@ -962,11 +961,6 @@ body.lamp-off .grid-overlay {
   transition: opacity 0.8s ease;
 }
 
-body.lamp-off #field {
-  opacity: 0 !important;
-  transition: opacity 0.6s ease;
-}
-
 body.lamp-on {
   background: #08080c !important;
   overflow-y: auto !important;
@@ -976,11 +970,6 @@ body.lamp-on .orb,
 body.lamp-on .grid-overlay {
   opacity: 0.75;
   transition: opacity 0.8s ease;
-}
-
-body.lamp-on #field {
-  opacity: 1 !important;
-  transition: opacity 0.85s ease;
 }
 
 /* Studio Lamp Stage Layout */
