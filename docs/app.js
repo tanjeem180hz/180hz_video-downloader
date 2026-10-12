@@ -2039,7 +2039,7 @@ async function triggerSaveAs(url, filename) {
 
     let lampAudioVoice = null;
     try {
-      lampAudioVoice = new Audio("click.mp3?v=2");
+      lampAudioVoice = new Audio("click.mp3?v=3");
       lampAudioVoice.preload = "auto";
       lampAudioVoice.load();
     } catch (e) {}
@@ -2128,24 +2128,17 @@ async function triggerSaveAs(url, filename) {
     function playLampSound(on) {
       try {
         if (!lampAudioVoice) {
-          lampAudioVoice = new Audio("click.mp3?v=2");
+          lampAudioVoice = new Audio("click.mp3?v=3");
           lampAudioVoice.preload = "auto";
         }
 
-        if (on) {
-          lampAudioVoice.currentTime = 0;
-          const p = lampAudioVoice.play();
-          if (p !== undefined) {
-            p.catch(() => {
-              playSynthesizedMechanicalClick(true);
-            });
-          }
-        } else {
-          if (lampAudioVoice) {
-            lampAudioVoice.pause();
-            lampAudioVoice.currentTime = 0;
-          }
-          playSynthesizedMechanicalClick(false);
+        lampAudioVoice.pause();
+        lampAudioVoice.currentTime = 0;
+        const p = lampAudioVoice.play();
+        if (p !== undefined) {
+          p.catch(() => {
+            playSynthesizedMechanicalClick(on);
+          });
         }
       } catch (err) {
         playSynthesizedMechanicalClick(on);
