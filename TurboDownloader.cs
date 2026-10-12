@@ -414,6 +414,149 @@ namespace TurboDownloader
             catch { }
         }
 
+        private static bool isCustomSaveDirConfigured = false;
+        private static readonly object folderPickerLock = new object();
+
+        private static string GetSaveFolderConfigPath()
+        {
+            try
+            {
+                string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+                string dir = Path.Combine(localAppData, "Programs", "180Hz Downloader");
+                if (!Directory.Exists(dir)) Directory.CreateDirectory(dir);
+                return Path.Combine(dir, "save_folder.cfg");
+            }
+            catch
+            {
+                return Path.Combine(appDir ?? AppDomain.CurrentDomain.BaseDirectory, "save_folder.cfg");
+            }
+        }
+
+        private static void LoadSaveFolderConfig()
+        {
+            string defaultDownloads = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads");
+            if (!Directory.Exists(defaultDownloads)) defaultDownloads = appDir;
+
+            try
+            {
+                string cfgPath = GetSaveFolderConfigPath();
+                string localCfgPath = Path.Combine(appDir ?? AppDomain.CurrentDomain.BaseDirectory, "save_folder.cfg");
+                string savedPath = null;
+
+                if (File.Exists(cfgPath))
+                {
+                    savedPath = File.ReadAllText(cfgPath, Encoding.UTF8).Trim();
+                }
+                else if (File.Exists(localCfgPath))
+                {
+                    savedPath = File.ReadAllText(localCfgPath, Encoding.UTF8).Trim();
+                }
+
+                if (!string.IsNullOrEmpty(savedPath))
+                {
+                    if (!Directory.Exists(savedPath))
+                    {
+                        try { Directory.CreateDirectory(savedPath); } catch { }
+                    }
+                    if (Directory.Exists(savedPath))
+                    {
+                        saveDir = savedPath;
+                        isCustomSaveDirConfigured = true;
+                        return;
+                    }
+                }
+            }
+            catch { }
+
+            saveDir = defaultDownloads;
+            isCustomSaveDirConfigured = false;
+        }
+
+        private static bool SaveCustomFolderConfig(string folderPath)
+        {
+            if (string.IsNullOrEmpty(folderPath)) return false;
+            try
+            {
+                folderPath = folderPath.Trim();
+                if (!Directory.Exists(folderPath))
+                {
+                    Directory.CreateDirectory(folderPath);
+                }
+                saveDir = folderPath;
+                isCustomSaveDirConfigured = true;
+
+                string cfgPath = GetSaveFolderConfigPath();
+                File.WriteAllText(cfgPath, folderPath, Encoding.UTF8);
+
+                try
+                {
+                    string localCfgPath = Path.Combine(appDir ?? AppDomain.CurrentDomain.BaseDirectory, "save_folder.cfg");
+                    File.WriteAllText(localCfgPath, folderPath, Encoding.UTF8);
+                }
+                catch { }
+
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static string PromptUserForSaveFolder()
+        {
+            lock (folderPickerLock)
+            {
+                string selectedPath = null;
+                Thread staThread = new Thread(() =>
+                {
+                    try
+                    {
+                        using (Form topForm = new Form())
+                        {
+                            topForm.TopMost = true;
+                            topForm.ShowInTaskbar = false;
+                            topForm.FormBorderStyle = FormBorderStyle.None;
+                            topForm.StartPosition = FormStartPosition.CenterScreen;
+                            topForm.Size = new Size(1, 1);
+                            topForm.Opacity = 0;
+                            topForm.Show();
+                            topForm.Focus();
+                            topForm.BringToFront();
+                            topForm.Activate();
+
+                            using (FolderBrowserDialog fbd = new FolderBrowserDialog())
+                            {
+                                fbd.Description = "Select a folder on This PC to save downloaded videos & audio (180Hz Downloader):";
+                                fbd.ShowNewFolderButton = true;
+                                fbd.RootFolder = Environment.SpecialFolder.MyComputer;
+                                if (isCustomSaveDirConfigured && !string.IsNullOrEmpty(saveDir) && Directory.Exists(saveDir))
+                                {
+                                    fbd.SelectedPath = saveDir;
+                                }
+                                DialogResult result = fbd.ShowDialog(topForm);
+                                if (result == DialogResult.OK && !string.IsNullOrEmpty(fbd.SelectedPath))
+                                {
+                                    selectedPath = fbd.SelectedPath;
+                                }
+                            }
+                            topForm.Close();
+                        }
+                    }
+                    catch { }
+                });
+                staThread.SetApartmentState(ApartmentState.STA);
+                staThread.Start();
+                staThread.Join();
+
+                if (!string.IsNullOrEmpty(selectedPath))
+                {
+                    SaveCustomFolderConfig(selectedPath);
+                }
+                return selectedPath;
+            }
+        }
+
         [STAThread]
         static void Main()
         {
@@ -459,8 +602,7 @@ namespace TurboDownloader
 
                 appDir = AppDomain.CurrentDomain.BaseDirectory;
                 EnsureEmbeddedWebAssets(appDir, false);
-                saveDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads");
-                if (!Directory.Exists(saveDir)) saveDir = appDir;
+                LoadSaveFolderConfig();
 
                 ytdlpPath = Path.Combine(appDir, "yt-dlp.exe");
                 ffmpegPath = Path.Combine(appDir, "ffmpeg.exe");
@@ -868,7 +1010,9 @@ namespace TurboDownloader
                         status = depStatusMessage,
                         isReady = File.Exists(ytdlpPath) && File.Exists(ffmpegPath),
                         isUpdating = isUpdatingYtDlp,
-                        port = port
+                        port = port,
+                        saveDir = saveDir,
+                        isSaveDirConfigured = isCustomSaveDirConfigured
                     });
                     return;
                 }
@@ -936,6 +1080,68 @@ namespace TurboDownloader
                 {
                     string id = ExtractIdFromUrl(rawUrl, "/api/v1/downloads/", "/open");
                     HandleOpenCompleted(res, id, req.QueryString["target"]);
+                }
+                else if (rawUrl == "/api/v1/system/save-folder" && req.HttpMethod == "GET")
+                {
+                    SendJson(res, new {
+                        success = true,
+                        path = saveDir,
+                        isConfigured = isCustomSaveDirConfigured
+                    });
+                    return;
+                }
+                else if (rawUrl == "/api/v1/system/save-folder" && req.HttpMethod == "POST")
+                {
+                    string body = ReadBody(req);
+                    try
+                    {
+                        var dict = json.Deserialize<Dictionary<string, object>>(body);
+                        if (dict != null && dict.ContainsKey("path"))
+                        {
+                            string customPath = Convert.ToString(dict["path"]).Trim();
+                            if (SaveCustomFolderConfig(customPath))
+                            {
+                                SendJson(res, new {
+                                    success = true,
+                                    path = saveDir,
+                                    isConfigured = isCustomSaveDirConfigured
+                                });
+                                return;
+                            }
+                        }
+                    }
+                    catch { }
+                    res.StatusCode = 400;
+                    SendJson(res, new { success = false, message = "Invalid or inaccessible folder path." });
+                    return;
+                }
+                else if (rawUrl == "/api/v1/system/select-folder" && req.HttpMethod == "POST")
+                {
+                    string chosen = PromptUserForSaveFolder();
+                    SendJson(res, new {
+                        success = true,
+                        selected = !string.IsNullOrEmpty(chosen),
+                        path = saveDir,
+                        isConfigured = isCustomSaveDirConfigured
+                    });
+                    return;
+                }
+                else if (rawUrl == "/api/v1/system/open-save-folder" && req.HttpMethod == "POST")
+                {
+                    try
+                    {
+                        if (!string.IsNullOrEmpty(saveDir) && Directory.Exists(saveDir))
+                        {
+                            Process.Start("explorer.exe", saveDir);
+                        }
+                    }
+                    catch { }
+                    SendJson(res, new {
+                        success = true,
+                        path = saveDir,
+                        isConfigured = isCustomSaveDirConfigured
+                    });
+                    return;
                 }
                 else if (rawUrl == "/api/v1/system/open-url" && req.HttpMethod == "POST")
                 {
@@ -1523,6 +1729,21 @@ namespace TurboDownloader
                 return;
             }
 
+            if (!isCustomSaveDirConfigured)
+            {
+                string chosen = PromptUserForSaveFolder();
+                if (string.IsNullOrEmpty(chosen))
+                {
+                    res.StatusCode = 400;
+                    SendJson(res, new {
+                        success = false,
+                        code = "FOLDER_SELECTION_CANCELLED",
+                        message = "Please select a folder on This PC to save your download."
+                    });
+                    return;
+                }
+            }
+
             bool isAudioReq = audioOnly || container == "mp3" || (formatId ?? "").StartsWith("mp3") || (formatId ?? "") == "bestaudio";
             string effectiveContainer = isAudioReq ? "mp3" : container;
 
@@ -1543,7 +1764,9 @@ namespace TurboDownloader
 
             SendJson(res, new {
                 success = true,
-                data = new { id = jobId }
+                saveDir = saveDir,
+                isConfigured = isCustomSaveDirConfigured,
+                data = new { id = jobId, saveDir = saveDir }
             });
         }
 

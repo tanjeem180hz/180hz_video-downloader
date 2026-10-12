@@ -10,6 +10,8 @@ yt-dlp.exe
 *.bin
 *.log
 *.tmp
+save_folder.cfg
+cookies.txt
 
 # User downloads folder contents if any
 *.mp4

@@ -1442,6 +1442,26 @@ async function triggerSaveAs(url, filename) {
       msg.textContent = "";
       errContainer.innerHTML = "";
       fill.style.width = "0%";
+
+      // 1st-time download check: if no custom save folder has been selected yet, prompt "This PC" folder dialog first
+      if ((r.isLocalBackend || isDesktopEnvironment()) && typeof SaveFolderManager !== "undefined" && !SaveFolderManager.isConfigured()) {
+        text.textContent = "📁 Select Folder on This PC…";
+        msg.textContent = "First time download: Please choose a folder on This PC where videos will be saved.";
+        const selected = await SaveFolderManager.selectFolder();
+        if (!selected || !selected.success) {
+          isDownloading = false;
+          btn.disabled = false;
+          cancel.classList.add("hidden");
+          fill.style.width = "0%";
+          text.textContent = "Download Video ▼";
+          msg.className = "msg";
+          msg.textContent = "Folder selection cancelled. Select a folder on This PC to download.";
+          setTimeout(() => { if (!isDownloading) msg.textContent = ""; }, 4500);
+          return;
+        }
+        msg.textContent = "";
+      }
+
       text.textContent = "Downloading… 0%";
 
       const payload = {
@@ -1468,6 +1488,9 @@ async function triggerSaveAs(url, filename) {
         }
 
         const createData = await createRes.json();
+        if (createData.saveDir && typeof SaveFolderManager !== "undefined") {
+          SaveFolderManager.applyState(createData.saveDir, true);
+        }
         const job = createData.data;
         currentJobId = job.id;
 
@@ -2450,6 +2473,151 @@ async function triggerSaveAs(url, filename) {
     return { init, checkGithubVersion, executeUpdate, CURRENT_VERSION };
   })();
 
-  // Initialize Update Manager
+  /* ══════════════════════════════════════════════════════════════════
+     CUSTOM SAVE FOLDER MANAGER (1st-Time Prompt + Pre-Select / Change Anytime)
+     ══════════════════════════════════════════════════════════════════ */
+  const SaveFolderManager = (() => {
+    let currentPath = "";
+    let configured = false;
+    let isPicking = false;
+
+    function updateUi() {
+      const pathEl = document.getElementById("saveFolderPathText");
+      const badgeEl = document.getElementById("saveFolderStatusBadge");
+      const btnTextEl = document.getElementById("selectSaveFolderBtnText");
+      const openBtnEl = document.getElementById("openSaveFolderBtn");
+
+      if (configured && currentPath) {
+        if (pathEl) {
+          pathEl.textContent = currentPath;
+          pathEl.title = `All downloads automatically save to: ${currentPath}`;
+        }
+        if (badgeEl) {
+          badgeEl.textContent = "AUTO-SAVE ACTIVE";
+          badgeEl.className = "save-folder-badge active";
+        }
+        if (btnTextEl && !isPicking) {
+          btnTextEl.textContent = "Change Folder";
+        }
+        if (openBtnEl) {
+          openBtnEl.style.display = "inline-flex";
+        }
+      } else {
+        if (pathEl) {
+          pathEl.textContent = "First download will ask to select a folder on This PC (or select now)";
+          pathEl.title = "Click 'Select Folder' to pre-select your save folder, or it will ask on your 1st download";
+        }
+        if (badgeEl) {
+          badgeEl.textContent = "1ST TIME SETUP";
+          badgeEl.className = "save-folder-badge pending";
+        }
+        if (btnTextEl && !isPicking) {
+          btnTextEl.textContent = "Select Folder";
+        }
+        if (openBtnEl) {
+          openBtnEl.style.display = "inline-flex";
+        }
+      }
+    }
+
+    function applyState(pathStr, isConfig) {
+      if (pathStr) currentPath = pathStr;
+      configured = Boolean(isConfig && currentPath);
+      updateUi();
+    }
+
+    async function refreshFromBackend() {
+      try {
+        const res = await fetch(`${BACKEND_API_BASE}/system/save-folder`, { cache: "no-store" });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data && data.success) {
+          applyState(data.path || "", Boolean(data.isConfigured));
+        }
+      } catch {
+        // Ignore when offline or web-only
+      }
+    }
+
+    async function selectFolder() {
+      if (isPicking) return { success: false };
+      isPicking = true;
+
+      const selectBtn = document.getElementById("selectSaveFolderBtn");
+      const btnTextEl = document.getElementById("selectSaveFolderBtnText");
+      if (selectBtn) selectBtn.disabled = true;
+      if (btnTextEl) btnTextEl.textContent = "Opening This PC…";
+
+      try {
+        const res = await fetch(`${BACKEND_API_BASE}/system/select-folder`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.success && data.path) {
+            isPicking = false;
+            if (selectBtn) selectBtn.disabled = false;
+            applyState(data.path, true);
+            return { success: true, path: data.path };
+          }
+        }
+      } catch {
+        // Fallback if backend is not reachable
+      }
+
+      isPicking = false;
+      if (selectBtn) selectBtn.disabled = false;
+      updateUi();
+      return { success: false };
+    }
+
+    async function openFolder() {
+      try {
+        await fetch(`${BACKEND_API_BASE}/system/open-save-folder`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" }
+        });
+      } catch {
+        // Ignore error
+      }
+    }
+
+    function init() {
+      const selectBtn = document.getElementById("selectSaveFolderBtn");
+      if (selectBtn) {
+        selectBtn.addEventListener("click", async (e) => {
+          e.preventDefault();
+          await selectFolder();
+        });
+      }
+
+      const openBtn = document.getElementById("openSaveFolderBtn");
+      if (openBtn) {
+        openBtn.addEventListener("click", async (e) => {
+          e.preventDefault();
+          await openFolder();
+        });
+      }
+
+      updateUi();
+      refreshFromBackend();
+      window.addEventListener("focus", refreshFromBackend, { passive: true });
+    }
+
+    return {
+      init,
+      selectFolder,
+      openFolder,
+      applyState,
+      refreshFromBackend,
+      isConfigured: () => configured,
+      getPath: () => currentPath
+    };
+  })();
+
+  // Initialize Save Folder Manager & Update Manager
+  SaveFolderManager.init();
   UpdateManager.init();
 })();
+
