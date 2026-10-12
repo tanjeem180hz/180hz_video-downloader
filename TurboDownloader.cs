@@ -82,6 +82,13 @@ namespace TurboDownloader
         private static bool isDownloadingDeps = false;
         private static string depStatusMessage = "Ready";
 
+        private const string APP_VERSION = "2.1.0";
+        private const int APP_VERSION_CODE = 210;
+        private const string GITHUB_VERSION_URL = "https://raw.githubusercontent.com/tanjeem180hz/180hz_video-downloader/main/version.json";
+        private const string GITHUB_PAGES_VERSION_URL = "https://tanjeem180hz.github.io/180hz_video-downloader/version.json";
+        private const string GITHUB_SETUP_DOWNLOAD_URL = "https://raw.githubusercontent.com/tanjeem180hz/180hz_video-downloader/main/180Hz%20Downloader%20Setup.exe";
+        private const string GITHUB_REPO_URL = "https://github.com/tanjeem180hz/180hz_video-downloader";
+
         private static string FindSystemFFmpeg()
         {
             try
@@ -829,6 +836,10 @@ namespace TurboDownloader
                 {
                     ServeFile(res, GetWebFilePath("app.js"), "application/javascript; charset=utf-8", isHead);
                 }
+                else if (rawUrl == "/version.json")
+                {
+                    ServeFile(res, GetWebFilePath("version.json"), "application/json; charset=utf-8", isHead);
+                }
                 // FlowDown / PEAK/8K API endpoints
                 else if (rawUrl.StartsWith("/api/v1/media/analyze") && req.HttpMethod == "POST")
                 {
@@ -886,6 +897,14 @@ namespace TurboDownloader
                     catch { }
                     SendJson(res, new { success = true });
                     return;
+                }
+                else if ((rawUrl == "/api/v1/system/check-update" || rawUrl.StartsWith("/api/v1/system/check-update?")) && (req.HttpMethod == "GET" || req.HttpMethod == "POST"))
+                {
+                    HandleCheckUpdate(res);
+                }
+                else if (rawUrl == "/api/v1/system/apply-update" && req.HttpMethod == "POST")
+                {
+                    HandleApplyUpdate(res);
                 }
                 else if (rawUrl == "/api/v1/system/exit" && req.HttpMethod == "POST")
                 {
@@ -2042,6 +2061,164 @@ namespace TurboDownloader
             }
 
             SendJson(res, new { success = true, launched = launched });
+        }
+
+        private static bool IsNewerVersion(string remoteVer, string localVer)
+        {
+            if (string.IsNullOrEmpty(remoteVer) || string.IsNullOrEmpty(localVer)) return false;
+            try
+            {
+                string cleanR = remoteVer.Trim().TrimStart('v', 'V');
+                string cleanL = localVer.Trim().TrimStart('v', 'V');
+                string[] rParts = cleanR.Split('.');
+                string[] lParts = cleanL.Split('.');
+                int max = Math.Max(rParts.Length, lParts.Length);
+                for (int i = 0; i < max; i++)
+                {
+                    int rVal = i < rParts.Length ? int.Parse(rParts[i]) : 0;
+                    int lVal = i < lParts.Length ? int.Parse(lParts[i]) : 0;
+                    if (rVal > lVal) return true;
+                    if (rVal < lVal) return false;
+                }
+            }
+            catch { }
+            return false;
+        }
+
+        private static void HandleCheckUpdate(HttpListenerResponse res)
+        {
+            try
+            {
+                string remoteJsonStr = null;
+                string[] candidateUrls = new string[] {
+                    GITHUB_VERSION_URL + "?_ts=" + DateTime.UtcNow.Ticks,
+                    GITHUB_PAGES_VERSION_URL + "?_ts=" + DateTime.UtcNow.Ticks
+                };
+
+                foreach (string url in candidateUrls)
+                {
+                    try
+                    {
+                        using (WebClient wc = new WebClient())
+                        {
+                            wc.Headers.Add("User-Agent", "180HzDownloader/" + APP_VERSION);
+                            wc.Headers.Add("Cache-Control", "no-cache");
+                            remoteJsonStr = wc.DownloadString(url);
+                            if (!string.IsNullOrEmpty(remoteJsonStr)) break;
+                        }
+                    }
+                    catch { }
+                }
+
+                if (string.IsNullOrEmpty(remoteJsonStr))
+                {
+                    SendJson(res, new {
+                        success = true,
+                        hasUpdate = false,
+                        currentVersion = APP_VERSION,
+                        latestVersion = APP_VERSION,
+                        message = "Unable to reach GitHub update server."
+                    });
+                    return;
+                }
+
+                Dictionary<string, object> dict = json.Deserialize<Dictionary<string, object>>(remoteJsonStr);
+                string latestVer = dict.ContainsKey("version") ? dict["version"].ToString() : APP_VERSION;
+                string downloadUrl = dict.ContainsKey("downloadUrl") ? dict["downloadUrl"].ToString() : GITHUB_SETUP_DOWNLOAD_URL;
+                string changelog = dict.ContainsKey("changelog") ? dict["changelog"].ToString() : "";
+                bool hasUpdate = IsNewerVersion(latestVer, APP_VERSION);
+
+                SendJson(res, new {
+                    success = true,
+                    hasUpdate = hasUpdate,
+                    currentVersion = APP_VERSION,
+                    latestVersion = latestVer,
+                    downloadUrl = downloadUrl,
+                    githubUrl = GITHUB_REPO_URL,
+                    changelog = changelog
+                });
+            }
+            catch (Exception ex)
+            {
+                SendJson(res, new {
+                    success = false,
+                    hasUpdate = false,
+                    currentVersion = APP_VERSION,
+                    error = ex.Message
+                });
+            }
+        }
+
+        private static void HandleApplyUpdate(HttpListenerResponse res)
+        {
+            try
+            {
+                string tempInstaller = Path.Combine(Path.GetTempPath(), "180Hz_Downloader_Update.exe");
+                if (File.Exists(tempInstaller)) { try { File.Delete(tempInstaller); } catch { } }
+
+                string[] downloadCandidates = new string[] {
+                    GITHUB_SETUP_DOWNLOAD_URL,
+                    "https://github.com/tanjeem180hz/180hz_video-downloader/raw/main/180Hz%20Downloader%20Setup.exe"
+                };
+
+                bool downloaded = false;
+                foreach (string dUrl in downloadCandidates)
+                {
+                    try
+                    {
+                        ServicePointManager.SecurityProtocol = (SecurityProtocolType)3072 | (SecurityProtocolType)768 | SecurityProtocolType.Tls;
+                        using (WebClient wc = new WebClient())
+                        {
+                            wc.Headers.Add("User-Agent", "180HzDownloader/" + APP_VERSION);
+                            wc.DownloadFile(dUrl, tempInstaller);
+                            if (File.Exists(tempInstaller) && new FileInfo(tempInstaller).Length > 50000)
+                            {
+                                downloaded = true;
+                                break;
+                            }
+                        }
+                    }
+                    catch { }
+                }
+
+                if (!downloaded)
+                {
+                    SendJson(res, new {
+                        success = false,
+                        message = "Failed to download update installer from GitHub."
+                    });
+                    return;
+                }
+
+                SendJson(res, new {
+                    success = true,
+                    message = "Update installer downloaded. Launching update and restarting..."
+                });
+
+                Task.Factory.StartNew(() =>
+                {
+                    Thread.Sleep(700);
+                    try
+                    {
+                        ProcessStartInfo psi = new ProcessStartInfo();
+                        psi.FileName = tempInstaller;
+                        psi.UseShellExecute = true;
+                        Process.Start(psi);
+                    }
+                    catch { }
+
+                    Thread.Sleep(500);
+                    CleanUp();
+                    Environment.Exit(0);
+                });
+            }
+            catch (Exception ex)
+            {
+                SendJson(res, new {
+                    success = false,
+                    message = ex.Message
+                });
+            }
         }
 
         private static string FormatBytes(long bytes)

@@ -1295,3 +1295,314 @@ body.lamp-on .main-workspace {
     filter: blur(0);
   }
 }
+
+/* ========================================================
+   MANDATORY GITHUB AUTO-UPDATE & VERSION GATE
+   ======================================================== */
+
+/* Nav Update Button (Shown ONLY when an update exists on GitHub) */
+.nav-update-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(255, 185, 35, 0.14);
+  border: 1px solid rgba(255, 185, 35, 0.45);
+  color: #ffd033;
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 0 16px rgba(255, 185, 35, 0.22);
+}
+
+.nav-update-btn:hover {
+  background: rgba(255, 185, 35, 0.25);
+  border-color: #ffd033;
+  color: #fff;
+  transform: translateY(-1px);
+  box-shadow: 0 0 24px rgba(255, 185, 35, 0.45);
+}
+
+.nav-update-pulse {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #ffb923;
+  box-shadow: 0 0 8px #ffb923;
+  animation: pulseDot 1.4s ease-in-out infinite;
+}
+
+@keyframes pulseDot {
+  0% { transform: scale(0.9); opacity: 0.7; }
+  50% { transform: scale(1.35); opacity: 1; box-shadow: 0 0 14px #ffb923; }
+  100% { transform: scale(0.9); opacity: 0.7; }
+}
+
+.nav-update-btn .ico-up {
+  width: 14px;
+  height: 14px;
+}
+
+/* Mandatory Version Gate Card (Shown ONLY when update is available) */
+.update-gate-card {
+  position: relative;
+  margin-bottom: 24px;
+  background: linear-gradient(180deg, rgba(26, 18, 12, 0.94) 0%, rgba(16, 13, 15, 0.96) 100%);
+  border: 1.5px solid rgba(255, 185, 35, 0.55);
+  border-radius: 18px;
+  padding: 24px 28px;
+  box-shadow: 0 16px 50px rgba(0, 0, 0, 0.85), 0 0 35px rgba(255, 185, 35, 0.18);
+  backdrop-filter: blur(16px);
+  overflow: hidden;
+  animation: gateCardSlideDown 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes gateCardSlideDown {
+  0% { opacity: 0; transform: translateY(-16px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+.update-gate-glow {
+  position: absolute;
+  top: -60px;
+  left: 20%;
+  width: 60%;
+  height: 120px;
+  background: radial-gradient(ellipse 70% 50% at 50% 50%, rgba(255, 185, 35, 0.25), transparent 70%);
+  pointer-events: none;
+  filter: blur(20px);
+}
+
+.update-gate-inner {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.update-gate-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.update-warning-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(255, 185, 35, 0.16);
+  border: 1px solid rgba(255, 185, 35, 0.4);
+  padding: 4px 12px;
+  border-radius: 999px;
+}
+
+.update-warn-pulse {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ffb923;
+  box-shadow: 0 0 10px #ffb923;
+  animation: pulseDot 1.2s infinite;
+}
+
+.update-warn-label {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  color: #ffb923;
+}
+
+.update-git-tag {
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  color: rgba(237, 237, 232, 0.5);
+  text-transform: uppercase;
+}
+
+.update-gate-body {
+  display: flex;
+  align-items: flex-start;
+  gap: 20px;
+}
+
+.update-icon-col {
+  flex-shrink: 0;
+}
+
+.update-shield-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  background: rgba(255, 185, 35, 0.12);
+  border: 1px solid rgba(255, 185, 35, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffd033;
+}
+
+.update-shield-icon svg {
+  width: 26px;
+  height: 26px;
+}
+
+.update-info-col {
+  flex: 1;
+}
+
+.update-gate-heading {
+  font-size: 18px;
+  font-weight: 700;
+  color: #ffffff;
+  margin: 0 0 6px 0;
+  letter-spacing: -0.01em;
+}
+
+.update-gate-msg {
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: rgba(237, 237, 232, 0.85);
+  margin: 0;
+}
+
+.v-badge {
+  color: #fff;
+  font-family: var(--font-mono, monospace);
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.v-badge.accent {
+  color: #08080c;
+  background: #ffd033;
+  font-weight: 700;
+}
+
+.update-changelog-text {
+  font-size: 12px;
+  color: rgba(216, 255, 62, 0.85);
+  margin: 6px 0 0 0;
+  font-style: italic;
+}
+
+.update-gate-footer {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding-top: 6px;
+}
+
+.btn-update-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  background: linear-gradient(135deg, #ffd033 0%, #d8ff3e 100%);
+  color: #08080c;
+  border: none;
+  padding: 12px 26px;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  box-shadow: 0 6px 24px rgba(255, 185, 35, 0.35);
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.btn-update-action:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 32px rgba(216, 255, 62, 0.45);
+  filter: brightness(1.08);
+}
+
+.btn-update-action:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.btn-update-action:disabled {
+  opacity: 0.75;
+  cursor: wait;
+}
+
+.btn-update-icon {
+  font-size: 16px;
+}
+
+.btn-update-sub {
+  font-size: 10px;
+  font-weight: 600;
+  opacity: 0.75;
+  text-transform: uppercase;
+  border-left: 1px solid rgba(8, 8, 12, 0.25);
+  padding-left: 10px;
+}
+
+.btn-update-github-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 12px;
+  color: rgba(237, 237, 232, 0.85);
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: all 0.2s ease;
+}
+
+.btn-update-github-link:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.3);
+  color: #fff;
+}
+
+.btn-update-github-link .ico {
+  width: 15px;
+  height: 15px;
+}
+
+/* Spinner for update downloading */
+.spin-ring {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(8, 8, 12, 0.3);
+  border-top-color: #08080c;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Mandatory Lockout State: Dims & Disables Downloader Console until updated */
+body.version-locked .console-form,
+body.version-locked #analyzeBtn,
+body.version-locked #urlInput,
+body.version-locked #pasteBtn,
+body.version-locked #clearBtn,
+body.version-locked .ledger [data-re-dl],
+body.version-locked #resultZone {
+  pointer-events: none !important;
+  opacity: 0.38 !important;
+  filter: grayscale(0.7) !important;
+  user-select: none !important;
+}
+
+body.version-locked #urlInput {
+  cursor: not-allowed !important;
+  background: rgba(28, 16, 18, 0.7) !important;
+  border-color: rgba(255, 100, 100, 0.3) !important;
+}

@@ -2110,6 +2110,15 @@ async function triggerSaveAs(url, filename) {
   }
 
   async function analyze(raw) {
+    if (document.body.classList.contains("version-locked")) {
+      const gate = document.getElementById("updateGateCard");
+      if (gate) gate.scrollIntoView({ behavior: "smooth", block: "center" });
+      showError("This version has been deprecated. Please click UPDATE NOW to continue.", {
+        title: "Update Required",
+        code: "VERSION_OUTDATED"
+      });
+      return;
+    }
     let clean = String(raw || (input ? input.value : "") || "").trim();
     if (!clean) {
       if (input) {
@@ -2456,4 +2465,224 @@ async function triggerSaveAs(url, filename) {
       });
     }
   })();
+
+  /* ========================================================
+     MANDATORY GITHUB AUTO-UPDATE & VERSION GATE
+     Checks GitHub repository for new releases.
+     If outdated: automatically disables legacy interface and
+     displays update prompt. Only visible when update is available.
+     ======================================================== */
+  const UpdateManager = (() => {
+    const CURRENT_VERSION = "2.1.0";
+    const GITHUB_REPO_OWNER = "tanjeem180hz";
+    const GITHUB_REPO_NAME = "180hz_video-downloader";
+    const GITHUB_VERSION_URL = `https://raw.githubusercontent.com/${GITHUB_REPO_OWNER}/${GITHUB_REPO_NAME}/main/version.json`;
+    const GITHUB_PAGES_URL = `https://${GITHUB_REPO_OWNER}.github.io/${GITHUB_REPO_NAME}/version.json`;
+    const GITHUB_SETUP_URL = `https://raw.githubusercontent.com/${GITHUB_REPO_OWNER}/${GITHUB_REPO_NAME}/main/180Hz%20Downloader%20Setup.exe`;
+    const GITHUB_PAGE_URL = `https://github.com/${GITHUB_REPO_OWNER}/${GITHUB_REPO_NAME}`;
+
+    let isUpdateAvailable = false;
+    let updateData = null;
+    let isUpdating = false;
+
+    function parseSemver(v) {
+      if (!v) return [0, 0, 0];
+      const clean = String(v).trim().replace(/^v/i, "");
+      return clean.split(".").map((n) => parseInt(n, 10) || 0);
+    }
+
+    function isNewer(remote, local) {
+      const r = parseSemver(remote);
+      const l = parseSemver(local);
+      const max = Math.max(r.length, l.length);
+      for (let i = 0; i < max; i++) {
+        const rv = r[i] || 0;
+        const lv = l[i] || 0;
+        if (rv > lv) return true;
+        if (rv < lv) return false;
+      }
+      return false;
+    }
+
+    async function checkGithubVersion() {
+      // 1. Try local backend check endpoint first
+      try {
+        const res = await fetch(`${BACKEND_API_BASE}/system/check-update`, { cache: "no-store" });
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.success && data.latestVersion) {
+            handleVersionCheckResult(data.latestVersion, data);
+            return;
+          }
+        }
+      } catch {}
+
+      // 2. Fetch directly from GitHub raw URL with timestamp cache-buster
+      const ts = Date.now();
+      try {
+        const res = await fetch(`${GITHUB_VERSION_URL}?_=${ts}`, { cache: "no-store" });
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.version) {
+            handleVersionCheckResult(data.version, data);
+            return;
+          }
+        }
+      } catch {}
+
+      // 3. Fallback to GitHub Pages
+      try {
+        const res = await fetch(`${GITHUB_PAGES_URL}?_=${ts}`, { cache: "no-store" });
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.version) {
+            handleVersionCheckResult(data.version, data);
+            return;
+          }
+        }
+      } catch {}
+    }
+
+    function handleVersionCheckResult(remoteVersion, fullData) {
+      if (isNewer(remoteVersion, CURRENT_VERSION)) {
+        isUpdateAvailable = true;
+        updateData = fullData || { version: remoteVersion };
+        applyUpdateGate(remoteVersion, updateData);
+      } else {
+        isUpdateAvailable = false;
+        removeUpdateGate();
+      }
+    }
+
+    function applyUpdateGate(latestVersion, data) {
+      // 1. Lock the application
+      document.body.classList.add("version-locked");
+
+      const urlInp = document.getElementById("urlInput");
+      if (urlInp) {
+        urlInp.disabled = true;
+        urlInp.placeholder = "⚠️ VERSION DEPRECATED — Please click UPDATE NOW above to continue";
+      }
+
+      const anBtn = document.getElementById("analyzeBtn");
+      if (anBtn) anBtn.disabled = true;
+
+      // 2. Populate version numbers
+      const gateCard = document.getElementById("updateGateCard");
+      const navBtn = document.getElementById("navUpdateBtn");
+      const gateCurrent = document.getElementById("gateCurrentVer");
+      const gateLatest = document.getElementById("gateLatestVer");
+      const navVer = document.getElementById("navUpdateVer");
+      const changelog = document.getElementById("gateChangelog");
+
+      if (gateCurrent) gateCurrent.textContent = `v${CURRENT_VERSION}`;
+      if (gateLatest) gateLatest.textContent = `v${latestVersion}`;
+      if (navVer) navVer.textContent = `v${latestVersion}`;
+      if (changelog && data && data.changelog) {
+        changelog.textContent = `Release notes: ${data.changelog}`;
+      }
+
+      // 3. Show Update button & gate card (MUST only show when update exists)
+      if (gateCard) gateCard.classList.remove("hidden");
+      if (navBtn) navBtn.classList.remove("hidden");
+    }
+
+    function removeUpdateGate() {
+      document.body.classList.remove("version-locked");
+
+      const urlInp = document.getElementById("urlInput");
+      if (urlInp && urlInp.placeholder.includes("VERSION DEPRECATED")) {
+        urlInp.disabled = false;
+        urlInp.placeholder = "Paste YouTube, Facebook, or Instagram link…";
+      }
+
+      const anBtn = document.getElementById("analyzeBtn");
+      if (anBtn) anBtn.disabled = false;
+
+      const gateCard = document.getElementById("updateGateCard");
+      const navBtn = document.getElementById("navUpdateBtn");
+      if (gateCard) gateCard.classList.add("hidden");
+      if (navBtn) navBtn.classList.add("hidden");
+    }
+
+    async function executeUpdate() {
+      if (isUpdating) return;
+      isUpdating = true;
+
+      const btn = document.getElementById("gateUpdateBtn");
+      const btnText = document.getElementById("gateUpdateBtnText");
+      const navBtn = document.getElementById("navUpdateBtn");
+
+      if (btn) btn.disabled = true;
+      if (btnText) btnText.innerHTML = `<span class="spin-ring"></span> DOWNLOADING UPDATE FROM GITHUB...`;
+      if (navBtn) navBtn.disabled = true;
+
+      // Try backend automatic installer application first
+      try {
+        const res = await fetch(`${BACKEND_API_BASE}/system/apply-update`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" }
+        });
+        const data = await res.json();
+        if (data && data.success) {
+          if (btnText) btnText.textContent = "LAUNCHING INSTALLER & RESTARTING...";
+          return;
+        }
+      } catch {}
+
+      // Fallback: download setup directly or open GitHub release in browser
+      const dlUrl = (updateData && updateData.downloadUrl) || GITHUB_SETUP_URL;
+      try {
+        const a = document.createElement("a");
+        a.href = dlUrl;
+        a.download = "180Hz Downloader Setup.exe";
+        a.target = "_blank";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        if (btnText) btnText.textContent = "DOWNLOAD STARTED — RUN SETUP TO COMPLETE";
+      } catch {
+        window.open(GITHUB_PAGE_URL, "_blank");
+      }
+
+      setTimeout(() => {
+        isUpdating = false;
+        if (btn) btn.disabled = false;
+        if (btnText) btnText.textContent = "UPDATE NOW & RESTART";
+        if (navBtn) navBtn.disabled = false;
+      }, 8000);
+    }
+
+    function init() {
+      const gateBtn = document.getElementById("gateUpdateBtn");
+      if (gateBtn) {
+        gateBtn.addEventListener("click", (e) => {
+          e.preventDefault();
+          executeUpdate();
+        });
+      }
+
+      const navBtn = document.getElementById("navUpdateBtn");
+      if (navBtn) {
+        navBtn.addEventListener("click", (e) => {
+          e.preventDefault();
+          executeUpdate();
+        });
+      }
+
+      // Check version immediately on launch
+      checkGithubVersion();
+
+      // Re-check periodically every 45 seconds
+      setInterval(checkGithubVersion, 45000);
+
+      // Re-check when window regains focus
+      window.addEventListener("focus", checkGithubVersion, { passive: true });
+    }
+
+    return { init, checkGithubVersion, executeUpdate, CURRENT_VERSION };
+  })();
+
+  // Initialize Update Manager
+  UpdateManager.init();
 })();

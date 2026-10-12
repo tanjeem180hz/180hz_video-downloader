@@ -39,6 +39,12 @@
         <span>180<span class="nav-hz">Hz</span> <em>DOWNLOADER</em></span>
       </div>
       <nav class="nav-meta">
+        <!-- Update button: shown ONLY when an update is available on GitHub -->
+        <button type="button" id="navUpdateBtn" class="nav-update-btn hidden" title="New update available on GitHub">
+          <span class="nav-update-pulse"></span>
+          <svg viewBox="0 0 24 24" class="ico-up" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          <span>UPDATE (<span id="navUpdateVer">v2.1.1</span>)</span>
+        </button>
         <a href="https://github.com/tanjeem180hz/180hz_video-downloader" target="_blank" rel="noopener noreferrer" class="nav-cta">GitHub</a>
       </nav>
     </header>
@@ -233,6 +239,50 @@
     <section id="console" class="console compact-console">
       <div class="sec-head">
         <h2>Paste Video or Audio Link</h2>
+      </div>
+
+      <!-- Mandatory Version Gate (Shown ONLY when an update is available on GitHub) -->
+      <div id="updateGateCard" class="update-gate-card hidden" role="alert">
+        <div class="update-gate-glow"></div>
+        <div class="update-gate-inner">
+          <div class="update-gate-header">
+            <div class="update-warning-pill">
+              <span class="update-warn-pulse"></span>
+              <span class="update-warn-label">UPDATE REQUIRED</span>
+            </div>
+            <span class="update-git-tag">GitHub Live Release</span>
+          </div>
+
+          <div class="update-gate-body">
+            <div class="update-icon-col">
+              <div class="update-shield-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                  <path d="M12 8v5M12 16h.01"/>
+                </svg>
+              </div>
+            </div>
+            <div class="update-info-col">
+              <h3 class="update-gate-heading">A Newer Version is Available on GitHub</h3>
+              <p class="update-gate-msg">
+                Your current version (<strong id="gateCurrentVer" class="v-badge">v2.1.0</strong>) is deprecated. You must click <strong>UPDATE NOW</strong> to upgrade to <strong id="gateLatestVer" class="v-badge accent">v2.1.1</strong> and continue downloading.
+              </p>
+              <p id="gateChangelog" class="update-changelog-text"></p>
+            </div>
+          </div>
+
+          <div class="update-gate-footer">
+            <button type="button" id="gateUpdateBtn" class="btn-update-action" title="Click to download and install latest update">
+              <span class="btn-update-icon">⚡</span>
+              <span id="gateUpdateBtnText" class="btn-update-text">UPDATE NOW &amp; RESTART</span>
+              <span class="btn-update-sub">1-Click Fast Auto Install</span>
+            </button>
+            <a href="https://github.com/tanjeem180hz/180hz_video-downloader" target="_blank" rel="noopener noreferrer" class="btn-update-github-link">
+              <svg viewBox="0 0 24 24" class="ico" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
+              <span>View on GitHub</span>
+            </a>
+          </div>
+        </div>
       </div>
 
       <div class="panel beam scanline">
