@@ -1073,6 +1073,10 @@ namespace TurboDownloader
             {
                 extArgs += " --add-header \"Accept-Language:en-US,en;q=0.9\"";
             }
+            if (safeUrl.IndexOf("youtube.com", StringComparison.OrdinalIgnoreCase) >= 0 || safeUrl.IndexOf("youtu.be", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                extArgs += " --extractor-args \"youtube:player_client=android,ios,mweb,web\"";
+            }
             string cookiesPath = Path.Combine(appDir, "cookies.txt");
             if (!File.Exists(cookiesPath)) cookiesPath = Path.Combine(saveDir, "cookies.txt");
             string cookiesArg = File.Exists(cookiesPath) ? string.Format("--cookies \"{0}\"", cookiesPath) : "";
@@ -1100,6 +1104,24 @@ namespace TurboDownloader
                     try { output = outTask.Wait(4000) ? outTask.Result : ""; } catch { }
                     string err = "";
                     try { err = errTask.Wait(1000) ? errTask.Result : ""; } catch { }
+
+                    // If YouTube analysis returned empty (e.g. rate limit), retry with tv_embedded/android fallback
+                    if (string.IsNullOrEmpty(output) && (safeUrl.IndexOf("youtube.com", StringComparison.OrdinalIgnoreCase) >= 0 || safeUrl.IndexOf("youtu.be", StringComparison.OrdinalIgnoreCase) >= 0))
+                    {
+                        try
+                        {
+                            psi.Arguments = string.Format("{0} {1} --extractor-args \"youtube:player_client=tv_embedded,android\" {2} --dump-json --no-playlist --no-warnings --socket-timeout 15 \"{3}\"", jsRuntimeArg, userAgentArg, cookiesArg, safeUrl);
+                            using (Process rp = Process.Start(psi))
+                            {
+                                Task<string> rOut = Task.Factory.StartNew(() => rp.StandardOutput.ReadToEnd());
+                                if (rp.WaitForExit(20000))
+                                {
+                                    output = rOut.Wait(3000) ? rOut.Result : "";
+                                }
+                            }
+                        }
+                        catch { }
+                    }
 
                     if (string.IsNullOrEmpty(output))
                     {
@@ -1586,6 +1608,10 @@ namespace TurboDownloader
             {
                 extArgs += " --add-header \"Accept:text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8\"";
             }
+            if (safeUrl.IndexOf("youtube.com", StringComparison.OrdinalIgnoreCase) >= 0 || safeUrl.IndexOf("youtu.be", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                extArgs += " --extractor-args \"youtube:player_client=android,ios,mweb,web\"";
+            }
             string cookiesPath = Path.Combine(appDir, "cookies.txt");
             if (!File.Exists(cookiesPath)) cookiesPath = Path.Combine(saveDir, "cookies.txt");
             string cookiesArg = File.Exists(cookiesPath) ? string.Format("--cookies \"{0}\"", cookiesPath) : "";
@@ -1696,6 +1722,46 @@ namespace TurboDownloader
                             string fallbackTemplate = Path.Combine(saveDir, "%(title)s (" + DateTime.Now.ToString("yyyyMMdd_HHmmss") + ").%(ext)s");
                             string retryArgs = string.Format("{0} {1} {2} {3} {4} {5} --ffmpeg-location \"{6}\" --force-overwrites --newline --no-playlist --no-mtime --windows-filenames -o \"{7}\" \"{8}\"",
                                 jsRuntimeArg, extArgs, cookiesArg, formatArg, mergeArg, faststartArg, ffmpeg, fallbackTemplate, safeUrl);
+
+                            errSb.Clear();
+                            psi.Arguments = retryArgs;
+                            job.process = new Process();
+                            job.process.StartInfo = psi;
+                            job.process.ErrorDataReceived += (s, e) => { if (e.Data != null) errSb.AppendLine(e.Data); };
+                            job.process.Start();
+                            job.process.BeginErrorReadLine();
+                            string retryLine;
+                            while ((retryLine = job.process.StandardOutput.ReadLine()) != null)
+                            {
+                                ParseDownloadOutput(job, retryLine);
+                            }
+                            job.process.WaitForExit();
+
+                            if (job.process.ExitCode == 0)
+                            {
+                                job.status = "COMPLETED";
+                                job.progressPercent = 100;
+                                if (!string.IsNullOrEmpty(job.filePath) && File.Exists(job.filePath))
+                                {
+                                    job.fileSizeBytes = new FileInfo(job.filePath).Length;
+                                }
+                                return;
+                            }
+                        }
+                        catch { }
+                    }
+
+                    // If YouTube anti-bot / HTTP 429 challenge triggered, retry with alternate tv_embedded,android client
+                    if (err.IndexOf("Sign in to confirm", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                        err.IndexOf("bot", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                        err.IndexOf("HTTP Error 429", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                        err.IndexOf("PO Token", StringComparison.OrdinalIgnoreCase) >= 0)
+                    {
+                        try
+                        {
+                            string fallbackClientArgs = userAgentArg + " --extractor-args \"youtube:player_client=tv_embedded,android\"";
+                            string retryArgs = string.Format("{0} {1} {2} {3} {4} {5} --ffmpeg-location \"{6}\" --force-overwrites --newline --no-playlist --no-mtime --windows-filenames -o \"{7}\" \"{8}\"",
+                                jsRuntimeArg, fallbackClientArgs, cookiesArg, formatArg, mergeArg, faststartArg, ffmpeg, outTemplate, safeUrl);
 
                             errSb.Clear();
                             psi.Arguments = retryArgs;
