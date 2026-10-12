@@ -2029,4 +2029,22 @@ async function triggerSaveAs(url, filename) {
       // Manual only: user must click Analyze
     }
   } catch {}
+
+  /* open official platform links in default OS browser when in desktop mode */
+  document.addEventListener("click", (e) => {
+    const link = e.target.closest("a.keyword-chip.platform");
+    if (link && link.href) {
+      const isLocalApp = (typeof location !== "undefined" && (location.port === "4000" || location.hostname === "127.0.0.1" || location.hostname === "localhost"));
+      if (isLocalApp) {
+        e.preventDefault();
+        fetch(`${BACKEND_API_BASE}/system/open-url`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url: link.href })
+        }).catch(() => {
+          window.open(link.href, "_blank");
+        });
+      }
+    }
+  });
 })();

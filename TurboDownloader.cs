@@ -771,6 +771,29 @@ namespace TurboDownloader
                     string id = ExtractIdFromUrl(rawUrl, "/api/v1/downloads/", "/open");
                     HandleOpenCompleted(res, id, req.QueryString["target"]);
                 }
+                else if (rawUrl == "/api/v1/system/open-url" && req.HttpMethod == "POST")
+                {
+                    string body = ReadBody(req);
+                    try
+                    {
+                        var ser = new JavaScriptSerializer();
+                        var dict = ser.Deserialize<Dictionary<string, object>>(body);
+                        if (dict != null && dict.ContainsKey("url"))
+                        {
+                            string targetUrl = dict["url"].ToString();
+                            if (targetUrl.StartsWith("http://") || targetUrl.StartsWith("https://"))
+                            {
+                                ProcessStartInfo psi = new ProcessStartInfo();
+                                psi.FileName = targetUrl;
+                                psi.UseShellExecute = true;
+                                Process.Start(psi);
+                            }
+                        }
+                    }
+                    catch { }
+                    SendJson(res, new { success = true });
+                    return;
+                }
                 else if (rawUrl == "/api/v1/system/exit" && req.HttpMethod == "POST")
                 {
                     SendJson(res, new { success = true, message = "Shutting down 180Hz Downloader" });
