@@ -2037,7 +2037,14 @@ async function triggerSaveAs(url, filename) {
 
     let isLampLit = false;
 
-    function playLampSound(on) {
+    let lampAudioVoice = null;
+    try {
+      lampAudioVoice = new Audio("click.mp3");
+      lampAudioVoice.preload = "auto";
+      lampAudioVoice.load();
+    } catch (e) {}
+
+    function playSynthesizedMechanicalClick(on) {
       try {
         const AudioCtx = window.AudioContext || window.webkitAudioContext;
         if (!AudioCtx) return;
@@ -2116,6 +2123,33 @@ async function triggerSaveAs(url, filename) {
           } catch (e) {}
         }, 150);
       } catch {}
+    }
+
+    function playLampSound(on) {
+      try {
+        if (!lampAudioVoice) {
+          lampAudioVoice = new Audio("click.mp3");
+          lampAudioVoice.preload = "auto";
+        }
+
+        if (on) {
+          lampAudioVoice.currentTime = 0;
+          const p = lampAudioVoice.play();
+          if (p !== undefined) {
+            p.catch(() => {
+              playSynthesizedMechanicalClick(true);
+            });
+          }
+        } else {
+          if (lampAudioVoice) {
+            lampAudioVoice.pause();
+            lampAudioVoice.currentTime = 0;
+          }
+          playSynthesizedMechanicalClick(false);
+        }
+      } catch (err) {
+        playSynthesizedMechanicalClick(on);
+      }
     }
 
     function setLampState(on, animate = true) {

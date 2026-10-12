@@ -19,7 +19,7 @@ copy /Y "180Hz Downloader.exe" "TurboDownloader.exe" >nul
 copy /Y "180Hz Downloader.exe" "180HzDownloader.exe" >nul
 
 echo Compiling 180Hz Downloader Setup.exe installer...
-"%CSC%" /target:winexe /optimize+ /win32icon:setup.ico /r:System.dll,System.Core.dll,System.Drawing.dll,System.Windows.Forms.dll /resource:"180Hz Downloader.exe","180Hz Downloader.exe" /resource:"180Hz Downloader.exe",TurboDownloader.exe /resource:app.ico,app.ico /resource:web\index.html,index.html /resource:web\styles.css,styles.css /resource:web\app.js,app.js /resource:web\version.json,version.json /out:"180Hz Downloader Setup.exe" "TurboDownloaderInstaller.cs"
+"%CSC%" /target:winexe /optimize+ /win32icon:setup.ico /r:System.dll,System.Core.dll,System.Drawing.dll,System.Windows.Forms.dll /resource:"180Hz Downloader.exe","180Hz Downloader.exe" /resource:"180Hz Downloader.exe",TurboDownloader.exe /resource:app.ico,app.ico /resource:web\index.html,index.html /resource:web\styles.css,styles.css /resource:web\app.js,app.js /resource:web\version.json,version.json /resource:web\click.mp3,click.mp3 /out:"180Hz Downloader Setup.exe" "TurboDownloaderInstaller.cs"
 if %ERRORLEVEL% NEQ 0 (
     echo BUILD FAILED for 180Hz Downloader Setup.exe!
     exit /b 1
@@ -45,6 +45,7 @@ copy /Y "web\index.html" "docs\index.html" >nul
 copy /Y "web\styles.css" "docs\styles.css" >nul
 copy /Y "web\app.js" "docs\app.js" >nul
 copy /Y "web\version.json" "docs\version.json" >nul
+copy /Y "web\click.mp3" "docs\click.mp3" >nul
 
 echo.
 echo ========================================================

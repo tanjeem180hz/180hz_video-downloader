@@ -60,11 +60,13 @@ namespace TurboDownloaderInstaller
             ExtractResourceOrCopy("styles.css", Path.Combine(webDir, "styles.css"));
             ExtractResourceOrCopy("app.js", Path.Combine(webDir, "app.js"));
             ExtractResourceOrCopy("version.json", Path.Combine(webDir, "version.json"));
+            ExtractResourceOrCopy("click.mp3", Path.Combine(webDir, "click.mp3"));
 
             ExtractResourceOrCopy("index.html", Path.Combine(installDir, "index.html"));
             ExtractResourceOrCopy("styles.css", Path.Combine(installDir, "styles.css"));
             ExtractResourceOrCopy("app.js", Path.Combine(installDir, "app.js"));
             ExtractResourceOrCopy("version.json", Path.Combine(installDir, "version.json"));
+            ExtractResourceOrCopy("click.mp3", Path.Combine(installDir, "click.mp3"));
             ExtractResourceOrCopy("app.ico", Path.Combine(installDir, "app.ico"));
 
             // Create Desktop and Start Menu Shortcuts

@@ -16,4 +16,7 @@ yt-dlp.exe
 *.webm
 *.mkv
 *.mp3
+!web/click.mp3
+!docs/click.mp3
+!click.mp3
 *.m4a

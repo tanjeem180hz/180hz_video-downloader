@@ -947,6 +947,10 @@ namespace TurboDownloader
                 {
                     ServeFile(res, GetWebFilePath("version.json"), "application/json; charset=utf-8", isHead);
                 }
+                else if (rawUrl == "/click.mp3")
+                {
+                    ServeFile(res, GetWebFilePath("click.mp3"), "audio/mpeg", isHead);
+                }
                 // FlowDown / PEAK/8K API endpoints
                 else if (rawUrl.StartsWith("/api/v1/media/analyze") && req.HttpMethod == "POST")
                 {
