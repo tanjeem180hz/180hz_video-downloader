@@ -2047,4 +2047,130 @@ async function triggerSaveAs(url, filename) {
       }
     }
   });
+
+  /* ========================================================
+     STUDIO LAMP THEME CONTROLLER
+     Direct Lamp Interface on Startup -> Click to Ignite -> Background illumination
+     ======================================================== */
+  (function initStudioLamp() {
+    const lampStage = document.getElementById("lampStage");
+    if (!lampStage) return;
+
+    const pullChain = document.getElementById("lampPullChain");
+    const lampHead = document.getElementById("lampClickableHead");
+    const standbyHint = document.getElementById("lampStandbyHint");
+    const navToggleBtn = document.getElementById("navLampToggleBtn");
+    const navToggleLabel = document.getElementById("navLampToggleLabel");
+
+    let isLampLit = false;
+
+    function playLampSound(on) {
+      try {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtx) return;
+        const ctx = new AudioCtx();
+        const now = ctx.currentTime;
+
+        // Primary mechanical switch snap
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = "triangle";
+        osc.frequency.setValueAtTime(on ? 1750 : 1250, now);
+        osc.frequency.exponentialRampToValueAtTime(70, now + 0.045);
+
+        gain.gain.setValueAtTime(0.28, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.045);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.045);
+
+        // Rebound chain resonance click
+        setTimeout(() => {
+          try {
+            const osc2 = ctx.createOscillator();
+            const gain2 = ctx.createGain();
+            osc2.type = "sine";
+            osc2.frequency.setValueAtTime(on ? 2400 : 1900, ctx.currentTime);
+            osc2.frequency.exponentialRampToValueAtTime(250, ctx.currentTime + 0.04);
+            gain2.gain.setValueAtTime(0.12, ctx.currentTime);
+            gain2.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.04);
+            osc2.connect(gain2);
+            gain2.connect(ctx.destination);
+            osc2.start(ctx.currentTime);
+            osc2.stop(ctx.currentTime + 0.04);
+          } catch {}
+        }, 35);
+      } catch {}
+    }
+
+    function setLampState(on, animate = true) {
+      isLampLit = on;
+
+      if (animate) {
+        if (pullChain) {
+          pullChain.classList.remove("chain-pulled");
+          void pullChain.offsetWidth; // trigger reflow
+          pullChain.classList.add("chain-pulled");
+          setTimeout(() => pullChain.classList.remove("chain-pulled"), 450);
+        }
+        playLampSound(on);
+      }
+
+      if (on) {
+        document.body.classList.remove("lamp-off");
+        document.body.classList.add("lamp-on");
+        if (navToggleLabel) navToggleLabel.textContent = "💡 Lamp: ON";
+        if (navToggleBtn) navToggleBtn.classList.add("lamp-active");
+      } else {
+        document.body.classList.remove("lamp-on");
+        document.body.classList.add("lamp-off");
+        if (navToggleLabel) navToggleLabel.textContent = "💡 Lamp: OFF";
+        if (navToggleBtn) navToggleBtn.classList.remove("lamp-active");
+      }
+    }
+
+    // Default startup state: Direct Lamp Interface in standby mode (Lamp OFF)
+    document.body.classList.add("lamp-off");
+    document.body.classList.remove("lamp-on");
+    if (navToggleLabel) navToggleLabel.textContent = "💡 Lamp: OFF";
+
+    // Click handlers
+    if (pullChain) {
+      pullChain.addEventListener("click", (e) => {
+        e.stopPropagation();
+        setLampState(!isLampLit, true);
+      });
+    }
+
+    if (lampHead) {
+      lampHead.addEventListener("click", (e) => {
+        e.stopPropagation();
+        setLampState(!isLampLit, true);
+      });
+    }
+
+    if (standbyHint) {
+      standbyHint.addEventListener("click", (e) => {
+        e.stopPropagation();
+        if (!isLampLit) setLampState(true, true);
+      });
+    }
+
+    if (lampStage) {
+      lampStage.addEventListener("click", (e) => {
+        if (!isLampLit) {
+          setLampState(true, true);
+        }
+      });
+    }
+
+    if (navToggleBtn) {
+      navToggleBtn.addEventListener("click", (e) => {
+        e.preventDefault();
+        setLampState(!isLampLit, true);
+      });
+    }
+  })();
 })();

@@ -39,10 +39,153 @@
         <span>180<span class="nav-hz">Hz</span> <em>DOWNLOADER</em></span>
       </div>
       <nav class="nav-meta">
+        <button type="button" id="navLampToggleBtn" class="nav-cta lamp-toggle-pill" title="Toggle Studio Lamp">
+          <span class="lamp-pill-dot"></span>
+          <span id="navLampToggleLabel">💡 Lamp: ON</span>
+        </button>
         <a href="https://github.com/tanjeem180hz/180hz_video-downloader" target="_blank" rel="noopener noreferrer" class="nav-cta">GitHub</a>
       </nav>
     </header>
 
+    <!-- Studio Lamp Interactive Lighting Stage -->
+    <div class="studio-lamp-stage" id="lampStage">
+      <!-- Volumetric light cone layers -->
+      <div class="lamp-beam-cone" id="lampBeamCone"></div>
+      <div class="lamp-ambient-pool" id="lampAmbientPool"></div>
+
+      <!-- The physical lamp fixture -->
+      <div class="lamp-fixture-wrap" id="lampFixtureWrap">
+        <svg viewBox="0 0 360 440" class="studio-lamp-svg" id="studioLampSvg" aria-label="Studio Lamp">
+          <defs>
+            <linearGradient id="cordGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stop-color="#141518"/>
+              <stop offset="50%" stop-color="#2c2e36"/>
+              <stop offset="100%" stop-color="#101114"/>
+            </linearGradient>
+
+            <linearGradient id="shadeOuterGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stop-color="#141518"/>
+              <stop offset="25%" stop-color="#2a2c34"/>
+              <stop offset="55%" stop-color="#1c1d22"/>
+              <stop offset="85%" stop-color="#2f323c"/>
+              <stop offset="100%" stop-color="#121316"/>
+            </linearGradient>
+
+            <linearGradient id="brassCollarGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stop-color="#5a4114"/>
+              <stop offset="35%" stop-color="#c9983e"/>
+              <stop offset="60%" stop-color="#ffd273"/>
+              <stop offset="85%" stop-color="#a87a2a"/>
+              <stop offset="100%" stop-color="#4d350d"/>
+            </linearGradient>
+
+            <linearGradient id="shadeRimGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stop-color="#7a591e"/>
+              <stop offset="50%" stop-color="#ffd573"/>
+              <stop offset="100%" stop-color="#5c4012"/>
+            </linearGradient>
+
+            <radialGradient id="innerShadeLitGrad" cx="50%" cy="30%" r="70%">
+              <stop offset="0%" stop-color="#ffffff"/>
+              <stop offset="25%" stop-color="#fffceb"/>
+              <stop offset="65%" stop-color="#f5e8b5"/>
+              <stop offset="90%" stop-color="#997833"/>
+              <stop offset="100%" stop-color="#402c0b"/>
+            </radialGradient>
+
+            <radialGradient id="innerShadeUnlitGrad" cx="50%" cy="30%" r="70%">
+              <stop offset="0%" stop-color="#24252a"/>
+              <stop offset="60%" stop-color="#16171a"/>
+              <stop offset="100%" stop-color="#0c0d0f"/>
+            </radialGradient>
+
+            <radialGradient id="bulbGlowGrad" cx="50%" cy="45%" r="55%">
+              <stop offset="0%" stop-color="#ffffff"/>
+              <stop offset="30%" stop-color="#fffce8"/>
+              <stop offset="65%" stop-color="#d8ff3e"/>
+              <stop offset="88%" stop-color="rgba(216, 255, 62, 0.4)"/>
+              <stop offset="100%" stop-color="rgba(216, 255, 62, 0)"/>
+            </radialGradient>
+
+            <filter id="softBulbBloom" x="-50%" y="-50%" width="200%" height="200%">
+              <feGaussianBlur in="SourceGraphic" stdDeviation="6" result="blur"/>
+              <feMerge>
+                <feMergeNode in="blur"/>
+                <feMergeNode in="SourceGraphic"/>
+              </feMerge>
+            </filter>
+          </defs>
+
+          <!-- Ceiling Mounting Canopy -->
+          <path d="M140 0 L220 0 L212 14 C212 18 206 20 200 20 L160 20 C154 20 148 18 148 14 Z" fill="#18191d" stroke="#0e0f12" stroke-width="1.5"/>
+
+          <!-- Braided Cable -->
+          <line x1="180" y1="20" x2="180" y2="150" stroke="url(#cordGrad)" stroke-width="4.5" stroke-linecap="round"/>
+
+          <!-- Cable Strain Relief -->
+          <rect x="176" y="146" width="8" height="12" rx="2" fill="url(#brassCollarGrad)"/>
+
+          <!-- Heavy Knurled Fixture Socket -->
+          <g class="lamp-socket-wrap">
+            <rect x="168" y="158" width="24" height="32" rx="3" fill="url(#brassCollarGrad)" stroke="#3a280b" stroke-width="1"/>
+            <line x1="168" y1="164" x2="192" y2="164" stroke="#48330e" stroke-width="1.2"/>
+            <line x1="168" y1="170" x2="192" y2="170" stroke="#48330e" stroke-width="1.2"/>
+            <line x1="168" y1="176" x2="192" y2="176" stroke="#48330e" stroke-width="1.2"/>
+            <line x1="168" y1="182" x2="192" y2="182" stroke="#48330e" stroke-width="1.2"/>
+          </g>
+
+          <!-- Shade Neck Mount -->
+          <path d="M162 190 L198 190 L204 204 L156 204 Z" fill="url(#brassCollarGrad)"/>
+
+          <!-- Clickable Lamp Head (Shade, Reflector, Bulb) -->
+          <g class="lamp-clickable-head" id="lampClickableHead" cursor="pointer">
+            <!-- Industrial Bell Lamp Shade (Outer Shell) -->
+            <path d="M156 204 C156 230 130 250 82 284 C68 294 58 304 54 316 C120 338 240 338 306 316 C302 304 292 294 278 284 C230 250 204 230 204 204 Z"
+                  fill="url(#shadeOuterGrad)" stroke="#111215" stroke-width="2"/>
+
+            <!-- Curvature Highlight Streak -->
+            <path d="M158 206 C158 230 134 250 90 284 C80 292 72 300 68 310"
+                  stroke="rgba(255,255,255,0.18)" stroke-width="3" stroke-linecap="round" fill="none"/>
+
+            <!-- Inner Shade Underside (Reflector) -->
+            <ellipse cx="180" cy="316" rx="126" ry="24" class="shade-inner-reflector" fill="url(#innerShadeUnlitGrad)" stroke="url(#shadeRimGrad)" stroke-width="2.5"/>
+
+            <!-- Bulb Unit -->
+            <g class="lamp-bulb-unit">
+              <!-- Bulb Glow Aura (When ON) -->
+              <ellipse cx="180" cy="328" rx="38" ry="48" class="bulb-glow-aura" fill="url(#bulbGlowGrad)" filter="url(#softBulbBloom)"/>
+
+              <!-- Bulb Glass Body -->
+              <path d="M170 308 C166 318 160 326 160 338 C160 352 168 360 180 360 C192 360 200 352 200 338 C200 326 194 318 190 308 Z"
+                    class="bulb-glass" fill="#1e1f24" stroke="rgba(255,255,255,0.2)" stroke-width="1.2"/>
+
+              <!-- Radiant Filament Loop -->
+              <path d="M174 328 L177 344 L180 330 L183 344 L186 328" class="bulb-filament" fill="none" stroke="#444" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+            </g>
+          </g>
+
+          <!-- Beaded Pull Chain with Brass Teardrop Handle -->
+          <g class="lamp-pull-chain" id="lampPullChain" cursor="pointer">
+            <circle cx="204" cy="180" r="3" fill="url(#brassCollarGrad)"/>
+            <line x1="204" y1="183" x2="204" y2="370" class="chain-beads" stroke="#c9983e" stroke-width="2.2" stroke-dasharray="1 3" stroke-linecap="round"/>
+            <path d="M204 370 C201 370 199 374 199 380 C199 390 202 398 204 400 C206 398 209 390 209 380 C209 374 207 370 204 370 Z"
+                  class="chain-handle" fill="url(#brassCollarGrad)" stroke="#3a280b" stroke-width="1.2"/>
+            <circle cx="204" cy="388" r="1.5" fill="#ffd573"/>
+          </g>
+        </svg>
+      </div>
+
+      <!-- Standby Callout / Hint (Only visible when lamp is off) -->
+      <div class="lamp-standby-hint" id="lampStandbyHint">
+        <div class="hint-pill">
+          <span class="hint-icon">⚡</span>
+          <span class="hint-text">CLICK LAMP OR PULL CORD TO POWER ON ENGINE</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Main Workspace (Encapsulating hero, console, footer) -->
+    <main id="mainAppWorkspace" class="main-workspace">
     <!-- hero -->
     <section class="hero compact-hero">
       <div class="hero-center">
@@ -150,6 +293,7 @@
         Fast, clean, high-quality video & audio downloader. Respect creators and copyright.
       </p>
     </footer>
+    </main>
 
     <script src="app.js?v=3.5.0" defer></script>
   </body>
