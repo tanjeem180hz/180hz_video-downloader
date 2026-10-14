@@ -440,10 +440,98 @@ namespace TurboDownloader
             }
         }
 
+        private static bool IsDirectoryWritable(string dirPath)
+        {
+            if (string.IsNullOrEmpty(dirPath)) return false;
+            try
+            {
+                if (!Directory.Exists(dirPath))
+                {
+                    try { Directory.CreateDirectory(dirPath); } catch { return false; }
+                }
+                string testFile = Path.Combine(dirPath, ".__180hz_test_" + Guid.NewGuid().ToString("N").Substring(0, 8) + ".tmp");
+                File.WriteAllText(testFile, "180hz_write_test", Encoding.UTF8);
+                if (File.Exists(testFile))
+                {
+                    try { File.Delete(testFile); } catch { }
+                    return true;
+                }
+            }
+            catch { }
+            return false;
+        }
+
+        private static string GetDefaultDownloadsFolder()
+        {
+            try
+            {
+                string userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+                if (!string.IsNullOrEmpty(userProfile))
+                {
+                    string dl = Path.Combine(userProfile, "Downloads");
+                    if (!Directory.Exists(dl)) try { Directory.CreateDirectory(dl); } catch { }
+                    if (Directory.Exists(dl) && IsDirectoryWritable(dl)) return dl;
+                }
+            }
+            catch { }
+
+            try
+            {
+                string docDl = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "Downloads");
+                if (!Directory.Exists(docDl)) try { Directory.CreateDirectory(docDl); } catch { }
+                if (Directory.Exists(docDl) && IsDirectoryWritable(docDl)) return docDl;
+            }
+            catch { }
+
+            return !string.IsNullOrEmpty(appDir) && IsDirectoryWritable(appDir) ? appDir : Path.GetTempPath();
+        }
+
+        private static string GetEffectiveWritableSaveDir(string targetDir)
+        {
+            if (string.IsNullOrEmpty(targetDir)) return GetDefaultDownloadsFolder();
+            try
+            {
+                targetDir = targetDir.Trim();
+                string root = Path.GetPathRoot(targetDir);
+                bool isDriveRoot = !string.IsNullOrEmpty(root) && 
+                    string.Equals(root.TrimEnd('\\', '/'), targetDir.TrimEnd('\\', '/'), StringComparison.OrdinalIgnoreCase);
+
+                // If user selected a drive root like "C:\" or a directory where direct file creation is denied:
+                if (isDriveRoot || !IsDirectoryWritable(targetDir))
+                {
+                    // 1. Try a "Downloads" subfolder under this drive (e.g. C:\Downloads, D:\Downloads)
+                    string subDownloads = Path.Combine(targetDir, "Downloads");
+                    try
+                    {
+                        if (!Directory.Exists(subDownloads)) Directory.CreateDirectory(subDownloads);
+                        if (IsDirectoryWritable(subDownloads)) return subDownloads;
+                    }
+                    catch { }
+
+                    // 2. Try a "180Hz Downloads" subfolder under this drive
+                    string sub180 = Path.Combine(targetDir, "180Hz Downloads");
+                    try
+                    {
+                        if (!Directory.Exists(sub180)) Directory.CreateDirectory(sub180);
+                        if (IsDirectoryWritable(sub180)) return sub180;
+                    }
+                    catch { }
+
+                    // 3. Fallback to the user's primary Windows Downloads folder
+                    return GetDefaultDownloadsFolder();
+                }
+
+                return targetDir;
+            }
+            catch
+            {
+                return GetDefaultDownloadsFolder();
+            }
+        }
+
         private static void LoadSaveFolderConfig()
         {
-            string defaultDownloads = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads");
-            if (!Directory.Exists(defaultDownloads)) defaultDownloads = appDir;
+            string defaultDownloads = GetDefaultDownloadsFolder();
 
             try
             {
@@ -462,14 +550,16 @@ namespace TurboDownloader
 
                 if (!string.IsNullOrEmpty(savedPath))
                 {
-                    if (!Directory.Exists(savedPath))
+                    string writablePath = GetEffectiveWritableSaveDir(savedPath);
+                    if (Directory.Exists(writablePath))
                     {
-                        try { Directory.CreateDirectory(savedPath); } catch { }
-                    }
-                    if (Directory.Exists(savedPath))
-                    {
-                        saveDir = savedPath;
+                        saveDir = writablePath;
                         isCustomSaveDirConfigured = true;
+                        if (!string.Equals(savedPath, writablePath, StringComparison.OrdinalIgnoreCase))
+                        {
+                            try { File.WriteAllText(cfgPath, writablePath, Encoding.UTF8); } catch { }
+                            try { File.WriteAllText(localCfgPath, writablePath, Encoding.UTF8); } catch { }
+                        }
                         return;
                     }
                 }
@@ -485,21 +575,21 @@ namespace TurboDownloader
             if (string.IsNullOrEmpty(folderPath)) return false;
             try
             {
-                folderPath = folderPath.Trim();
-                if (!Directory.Exists(folderPath))
+                string writablePath = GetEffectiveWritableSaveDir(folderPath);
+                if (!Directory.Exists(writablePath))
                 {
-                    Directory.CreateDirectory(folderPath);
+                    Directory.CreateDirectory(writablePath);
                 }
-                saveDir = folderPath;
+                saveDir = writablePath;
                 isCustomSaveDirConfigured = true;
 
                 string cfgPath = GetSaveFolderConfigPath();
-                File.WriteAllText(cfgPath, folderPath, Encoding.UTF8);
+                File.WriteAllText(cfgPath, writablePath, Encoding.UTF8);
 
                 try
                 {
                     string localCfgPath = Path.Combine(appDir ?? AppDomain.CurrentDomain.BaseDirectory, "save_folder.cfg");
-                    File.WriteAllText(localCfgPath, folderPath, Encoding.UTF8);
+                    File.WriteAllText(localCfgPath, writablePath, Encoding.UTF8);
                 }
                 catch { }
 
@@ -2071,7 +2161,9 @@ namespace TurboDownloader
             }
 
             bool isYouTube = safeUrl.IndexOf("youtube.com", StringComparison.OrdinalIgnoreCase) >= 0 || safeUrl.IndexOf("youtu.be", StringComparison.OrdinalIgnoreCase) >= 0;
-            string outTemplate = Path.Combine(saveDir, "%(title)s.%(ext)s");
+            string effectiveSaveDir = GetEffectiveWritableSaveDir(saveDir);
+            saveDir = effectiveSaveDir;
+            string outTemplate = Path.Combine(effectiveSaveDir, "%(title)s.%(ext)s");
             string np = GetNodePath();
             string jsRuntimeArg = !string.IsNullOrEmpty(np) ? string.Format("--js-runtimes node:\"{0}\"", np) : "";
             string userAgentArg = "--user-agent \"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36\"";
@@ -2092,7 +2184,7 @@ namespace TurboDownloader
             else
             {
                 cookiesPath = Path.Combine(appDir, "cookies.txt");
-                if (!File.Exists(cookiesPath)) cookiesPath = Path.Combine(saveDir, "cookies.txt");
+                if (!File.Exists(cookiesPath)) cookiesPath = Path.Combine(effectiveSaveDir, "cookies.txt");
             }
             string cookiesArg = (cookiesPath != null && File.Exists(cookiesPath)) ? string.Format("--cookies \"{0}\"", cookiesPath) : "";
 
@@ -2144,7 +2236,7 @@ namespace TurboDownloader
                     {
                         try
                         {
-                            DirectoryInfo di = new DirectoryInfo(saveDir);
+                            DirectoryInfo di = new DirectoryInfo(effectiveSaveDir);
                             FileInfo latest = di.GetFiles()
                                 .Where(f => !f.Name.EndsWith(".part") && !f.Name.EndsWith(".ytdl") && !f.Name.EndsWith(".aria2"))
                                 .OrderByDescending(f => f.LastWriteTimeUtc)
@@ -2192,14 +2284,17 @@ namespace TurboDownloader
                 {
                     string err = errSb.ToString();
 
-                    // If file is locked by Windows (e.g. playing in media player), auto-retry with timestamped suffix
+                    // If file is locked by Windows (e.g. playing in media player) or permission denied (e.g. drive root), auto-retry with safe writable directory and timestamped suffix
                     if (err.IndexOf("Permission denied", StringComparison.OrdinalIgnoreCase) >= 0 ||
                         err.IndexOf("used by another process", StringComparison.OrdinalIgnoreCase) >= 0 ||
                         err.IndexOf("Errno 13", StringComparison.OrdinalIgnoreCase) >= 0)
                     {
                         try
                         {
-                            string fallbackTemplate = Path.Combine(saveDir, "%(title)s (" + DateTime.Now.ToString("yyyyMMdd_HHmmss") + ").%(ext)s");
+                            string retryDir = IsDirectoryWritable(effectiveSaveDir) ? effectiveSaveDir : GetDefaultDownloadsFolder();
+                            saveDir = retryDir;
+                            SaveCustomFolderConfig(retryDir);
+                            string fallbackTemplate = Path.Combine(retryDir, "%(title)s (" + DateTime.Now.ToString("yyyyMMdd_HHmmss") + ").%(ext)s");
                             string retryArgs = string.Format("{0} {1} {2} {3} {4} {5} --ffmpeg-location \"{6}\" --force-overwrites --newline --no-playlist --no-mtime --windows-filenames -o \"{7}\" \"{8}\"",
                                 jsRuntimeArg, extArgs, cookiesArg, formatArg, mergeArg, faststartArg, ffmpeg, fallbackTemplate, safeUrl);
 
