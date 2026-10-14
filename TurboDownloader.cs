@@ -364,26 +364,62 @@ namespace TurboDownloader
             try
             {
                 string effectiveSave = GetEffectiveWritableSaveDir();
-                string[] candidates = new string[]
+                string userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+                List<string> checkDirs = new List<string>();
+
+                Action<string> AddDir = delegate(string d)
                 {
-                    Path.Combine(customSaveDir ?? "", "cookies.txt"),
-                    Path.Combine(effectiveSave ?? "", "cookies.txt"),
-                    Path.Combine(saveDir ?? "", "cookies.txt"),
-                    Path.Combine(appDir ?? "", "cookies.txt"),
-                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", "cookies.txt"),
-                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "180Hz Downloader", "cookies.txt")
+                    if (!string.IsNullOrEmpty(d) && Directory.Exists(d) && !checkDirs.Contains(d))
+                        checkDirs.Add(d);
                 };
 
-                foreach (string candidate in candidates)
+                AddDir(customSaveDir);
+                AddDir(effectiveSave);
+                AddDir(saveDir);
+                AddDir(appDir);
+                AddDir(Path.Combine(userProfile, "Downloads"));
+                AddDir(Path.Combine(userProfile, "Desktop"));
+                AddDir(Path.Combine(userProfile, "Documents"));
+                AddDir(userProfile);
+                AddDir(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "180Hz Downloader"));
+
+                // 1. Direct priority candidates
+                foreach (string dir in checkDirs)
                 {
-                    if (!string.IsNullOrEmpty(candidate) && File.Exists(candidate))
+                    string[] directCandidates = new string[]
                     {
-                        FileInfo fi = new FileInfo(candidate);
-                        if (fi.Length > 20)
+                        Path.Combine(dir, "cookies.txt"),
+                        Path.Combine(dir, "instagram_cookies.txt"),
+                        Path.Combine(dir, "cookie.txt"),
+                        Path.Combine(dir, "instagram.cookies")
+                    };
+
+                    foreach (string cand in directCandidates)
+                    {
+                        if (File.Exists(cand))
                         {
-                            return candidate;
+                            FileInfo fi = new FileInfo(cand);
+                            if (fi.Length > 20) return cand;
                         }
                     }
+                }
+
+                // 2. Scan each directory for any *cookie*.txt or *instagram*.txt
+                foreach (string dir in checkDirs)
+                {
+                    try
+                    {
+                        string[] txtFiles = Directory.GetFiles(dir, "*cookie*.txt", SearchOption.TopDirectoryOnly);
+                        foreach (string tf in txtFiles)
+                        {
+                            if (File.Exists(tf))
+                            {
+                                FileInfo fi = new FileInfo(tf);
+                                if (fi.Length > 20) return tf;
+                            }
+                        }
+                    }
+                    catch { }
                 }
             }
             catch { }
@@ -1898,9 +1934,18 @@ namespace TurboDownloader
                         string inferredTitle = "Media Stream";
                         try
                         {
-                            Match m = Regex.Match(safeUrl, @"(?:reel|p|tv|shorts|watch\?v=|\/)([A-Za-z0-9_\-]+)");
+                            Match m = Regex.Match(safeUrl, @"(?:reel|reels|p|tv|shorts)/([A-Za-z0-9_\-]+)");
+                            if (!m.Success)
+                            {
+                                m = Regex.Match(safeUrl, @"(?:watch\?v=)([A-Za-z0-9_\-]+)");
+                            }
                             if (m.Success && !string.IsNullOrEmpty(m.Groups[1].Value))
-                                inferredTitle = "Media Stream (" + m.Groups[1].Value + ")";
+                            {
+                                string code = m.Groups[1].Value;
+                                inferredTitle = safeUrl.IndexOf("instagram.com", StringComparison.OrdinalIgnoreCase) >= 0
+                                    ? "Instagram Reel (" + code + ")"
+                                    : "Media Stream (" + code + ")";
+                            }
                         }
                         catch { }
 
@@ -2583,6 +2628,55 @@ namespace TurboDownloader
                             }
                         }
                         catch { }
+                    }
+
+                    // If Instagram 18+ / audience restricted post, attempt auto-scan retry with any newly placed cookies.txt
+                    if (isInstagram && (err.IndexOf("available to everyone", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                                        err.IndexOf("certain audiences", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                                        err.IndexOf("empty media response", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                                        err.IndexOf("API is not granting access", StringComparison.OrdinalIgnoreCase) >= 0))
+                    {
+                        try
+                        {
+                            string freshCookies = ResolveUserPlatformCookies(safeUrl, effectiveSaveDir);
+                            if (!string.IsNullOrEmpty(freshCookies) && File.Exists(freshCookies) && freshCookies != cookiesPath)
+                            {
+                                string freshCookiesArg = string.Format("--cookies \"{0}\"", freshCookies);
+                                string retryArgs = string.Format("{0} {1} {2} {3} {4} {5} --ffmpeg-location \"{6}\" --force-overwrites --newline --no-playlist --no-mtime --windows-filenames -o \"{7}\" \"{8}\"",
+                                    jsRuntimeArg, extArgs, freshCookiesArg, formatArg, mergeArg, faststartArg, ffmpeg, outTemplate, safeUrl);
+
+                                errSb.Clear();
+                                psi.Arguments = retryArgs;
+                                job.process = new Process();
+                                job.process.StartInfo = psi;
+                                job.process.ErrorDataReceived += (s, e) => { if (e.Data != null) errSb.AppendLine(e.Data); };
+                                job.process.Start();
+                                job.process.BeginErrorReadLine();
+                                string retryLine;
+                                while ((retryLine = job.process.StandardOutput.ReadLine()) != null)
+                                {
+                                    ParseDownloadOutput(job, retryLine);
+                                }
+                                job.process.WaitForExit();
+
+                                if (job.process.ExitCode == 0)
+                                {
+                                    job.status = "COMPLETED";
+                                    job.progressPercent = 100;
+                                    if (!string.IsNullOrEmpty(job.filePath) && File.Exists(job.filePath))
+                                    {
+                                        job.fileSizeBytes = new FileInfo(job.filePath).Length;
+                                    }
+                                    return;
+                                }
+                            }
+                        }
+                        catch { }
+
+                        job.status = "FAILED";
+                        job.errorCode = "AGE_RESTRICTED";
+                        job.errorMessage = "This Instagram reel has 18+ audience restrictions set by the author. To download age-restricted reels directly in the app, please save your cookies.txt in your Downloads folder.";
+                        return;
                     }
 
                     job.status = "FAILED";

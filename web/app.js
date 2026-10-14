@@ -433,19 +433,11 @@ async function triggerSaveAs(url, filename) {
     const rawUrl = opts.url || (input && input.value ? input.value.trim() : "");
     const showAppDownload = opts.showAppDownload !== false;
 
-    const secondaryTunnelUrl = opts.secondaryTunnelUrl || null;
-    const isAudienceRestricted = opts.isAudienceRestricted === true;
-
-    // Contextual English and Bengali explanation
+    // Contextual English explanation
     let detailedExplanation = "";
     const lower = cause.toLowerCase();
-    const isAudienceFlagged = isAudienceRestricted || lower.includes("available to everyone") || lower.includes("certain audiences") || lower.includes("sensitive") || lower.includes("age");
-    const isLoginRequired = isAudienceFlagged || lower.includes("login") || lower.includes("cookie") || lower.includes("bot") || lower.includes("empty media response") || lower.includes("restricted") || lower.includes("api is not granting access");
-
-    if (isAudienceFlagged) {
-      detailedExplanation = "এই Reel-টি ইনস্টাগ্রাম ১৮+ বা Audience Restricted হিসেবে ফ্ল্যাগ করায় গেস্ট ব্রাউজিংয়ে ব্লক করা হয়েছে। এটি বাইপাস করতে নিচের Web Mirror ব্যবহার করুন অথবা cookies.txt যুক্ত করুন।";
-    } else if (isLoginRequired) {
-      detailedExplanation = "This media stream requires platform authentication, age verification, or is restricted by host security.";
+    if (lower.includes("login") || lower.includes("cookie") || lower.includes("bot") || lower.includes("empty media response") || lower.includes("restricted")) {
+      detailedExplanation = "This video or audio requires platform authentication, age verification, or is restricted by host security.";
     } else if (lower.includes("private") || lower.includes("unavailable") || lower.includes("deleted") || lower.includes("not found") || lower.includes("404")) {
       detailedExplanation = "The media file is private, deleted, or has been removed from the host platform.";
     } else if (lower.includes("connect") || lower.includes("failed to fetch") || lower.includes("networkerror") || lower.includes("local engine") || lower.includes("4000")) {
@@ -501,48 +493,7 @@ async function triggerSaveAs(url, filename) {
             ${detailedExplanation ? `<p style="font-size:12px;line-height:1.5;color:#fca5a5;margin-top:6px;">ℹ️ ${escapeHtml(detailedExplanation)}</p>` : ""}
           </div>
 
-          <!-- 2. Immediate Action Buttons (Directly below cause for fast access) -->
-          <div class="error-actions-row" style="margin-top:12px;margin-bottom:12px;display:flex;flex-wrap:wrap;gap:8px;">
-            ${tunnelUrl ? `
-              <a href="${tunnelUrl}" target="_blank" rel="noopener" class="post-dl-btn post-dl-btn-primary" style="text-decoration:none;">
-                ⚡ Direct Download via Web Mirror
-              </a>
-            ` : ""}
-            ${secondaryTunnelUrl ? `
-              <a href="${secondaryTunnelUrl}" target="_blank" rel="noopener" class="post-dl-btn" style="background:rgba(255,255,255,0.08);color:#f1f5f9;border:1px solid rgba(255,255,255,0.2);text-decoration:none;">
-                ⚡ Mirror 2 (FastDL)
-              </a>
-            ` : ""}
-            ${(isLoginRequired || isAudienceFlagged) ? `
-              <button type="button" class="post-dl-btn" id="importCookiesBtn" style="background:rgba(216,255,62,0.15);color:var(--lime);border:1px solid rgba(216,255,62,0.35);">
-                📁 Select cookies.txt from PC
-              </button>
-            ` : ""}
-            ${retryId ? `
-              <button type="button" class="post-dl-btn post-dl-btn-redownload" id="${retryId}">
-                ${escapeHtml(retryText)}
-              </button>
-            ` : ""}
-            ${(showAppDownload && !isDesktopEnvironment()) ? `
-              <a href="180Hz Downloader Setup.exe" download="180Hz Downloader Setup.exe" class="post-dl-btn" style="background:rgba(216,255,62,0.12);color:var(--lime);border:1px solid rgba(216,255,62,0.3);text-decoration:none;">
-                💻 Try in 180Hz Downloader (.exe)
-              </a>
-            ` : ""}
-          </div>
-
-          ${(isAudienceFlagged || isLoginRequired) ? `
-            <div class="cookie-helper-box" style="margin-bottom:14px;background:rgba(216,255,62,0.06);border:1px solid rgba(216,255,62,0.22);border-radius:10px;padding:12px 14px;font-size:12px;line-height:1.6;color:#e2e8f0;">
-              <div style="font-weight:700;color:var(--lime);display:flex;align-items:center;gap:6px;margin-bottom:6px;">
-                <span>💡 ইনস্টাগ্রাম ১৮+ বা রেস্ট্রিক্টেড রিল ডাউনলোডের উপায়:</span>
-              </div>
-              <div style="color:#cbd5e1;">
-                <p style="margin:0 0 6px 0;"><strong>১. এক ক্লিকে ডাউনলোড:</strong> উপরের <strong>⚡ Direct Download via Web Mirror</strong> বাটনে ক্লিক করলেই ব্রাউজারে ফুল কোয়ালিটিতে রিলটি পেয়ে যাবেন।</p>
-                <p style="margin:0 0 0 0;"><strong>২. সরাসরি অ্যাপে সেভ করা:</strong> আপনার ব্রাউজারের cookies ফাইলটি <strong>📁 Select cookies.txt from PC</strong> বাটনে ক্লিক করে সিলেক্ট করুন (অথবা সেভ ফোল্ডারে রাখুন)। এরপর <strong>🔄 Retry Download</strong> বাটনে চাপলেই ভিডিওটি সরাসরি সেভ ফোল্ডারে ডাউনলোড হয়ে যাবে।</p>
-              </div>
-            </div>
-          ` : ""}
-
-          <!-- 3. Contact Tanjeem (Owner) Section -->
+          <!-- 2. Contact Tanjeem (Owner) Section -->
           <div class="owner-contact-card">
             <div class="owner-contact-header">
               <div class="owner-badge-wrap">
@@ -571,10 +522,28 @@ async function triggerSaveAs(url, filename) {
               </a>
             </div>
           </div>
+
+          <!-- 3. Immediate Action Buttons -->
+          <div class="error-actions-row">
+            ${tunnelUrl ? `
+              <a href="${tunnelUrl}" target="_blank" rel="noopener" class="post-dl-btn post-dl-btn-primary" style="text-decoration:none;">
+                ⚡ Direct Download via Web Mirror
+              </a>
+            ` : ""}
+            ${retryId ? `
+              <button type="button" class="post-dl-btn post-dl-btn-redownload" id="${retryId}">
+                ${escapeHtml(retryText)}
+              </button>
+            ` : ""}
+            ${(showAppDownload && !isDesktopEnvironment()) ? `
+              <a href="180Hz Downloader Setup.exe" download="180Hz Downloader Setup.exe" class="post-dl-btn" style="background:rgba(216,255,62,0.12);color:var(--lime);border:1px solid rgba(216,255,62,0.3);text-decoration:none;">
+                💻 Try in 180Hz Downloader (.exe)
+              </a>
+            ` : ""}
+          </div>
         </div>
       </div>
     `;
-  }
   }
 
   function showError(msg, details = {}) {
@@ -1549,32 +1518,17 @@ async function triggerSaveAs(url, filename) {
               text.textContent = "Download Video ▼";
 
               const errMsg = currentJob.errorMessage || "Processing failed during download.";
-              const lowerErr = errMsg.toLowerCase();
-              const isAudienceRestricted = lowerErr.includes("available to everyone") ||
-                                          lowerErr.includes("certain audiences") ||
-                                          lowerErr.includes("empty media response") ||
-                                          lowerErr.includes("api is not granting access") ||
-                                          lowerErr.includes("sensitive") ||
-                                          lowerErr.includes("age");
-              const isPlatformProtected = isAudienceRestricted ||
-                                          lowerErr.includes("cookies") ||
-                                          lowerErr.includes("login") ||
-                                          lowerErr.includes("sign in") ||
-                                          lowerErr.includes("bot") ||
-                                          lowerErr.includes("restricted");
+              const isPlatformProtected = errMsg.includes("empty media response") || errMsg.includes("cookies") || errMsg.includes("login") || errMsg.includes("bot") || errMsg.includes("restricted") || currentJob.errorCode === "AGE_RESTRICTED";
               const tunnelUrl = getWebTunnelUrl(r.url, r.provider);
-              const secondaryTunnelUrl = (r.url.includes("instagram.com")) ? `https://fastdl.app/en?url=${encodeURIComponent(r.url)}` : null;
 
               errContainer.innerHTML = buildErrorCardHtml({
-                title: isAudienceRestricted ? "🔞 Restricted Content (Instagram Login Required)" : (isPlatformProtected ? "Platform Access Restricted" : "Download Failed"),
+                title: isPlatformProtected ? "Platform Access Restricted" : "Download Failed",
                 cause: errMsg,
                 code: currentJob.errorCode || "DL_FAILED",
                 retryId: "errRetryBtn",
                 retryText: "🔄 Retry Download",
                 tunnelUrl: tunnelUrl,
-                secondaryTunnelUrl: secondaryTunnelUrl,
                 url: r.url,
-                isAudienceRestricted: isAudienceRestricted,
                 showAppDownload: true
               });
 
@@ -1583,28 +1537,6 @@ async function triggerSaveAs(url, filename) {
                 if (retryBtn) {
                   retryBtn.addEventListener("click", () => {
                     executeDownload(selectedFormat, true);
-                  });
-                }
-                const importBtn = document.getElementById("importCookiesBtn");
-                if (importBtn) {
-                  importBtn.addEventListener("click", async () => {
-                    try {
-                      importBtn.disabled = true;
-                      importBtn.textContent = "Selecting file...";
-                      const res = await fetch(`${BACKEND_API_BASE}/system/select-cookies-file`, { method: "POST" });
-                      const data = await res.json();
-                      if (data && data.success) {
-                        importBtn.textContent = "✅ Cookies Imported!";
-                        alert("Cookies imported successfully! Now click '🔄 Retry Download'.");
-                      } else {
-                        importBtn.disabled = false;
-                        importBtn.textContent = "📁 Select cookies.txt from PC";
-                      }
-                    } catch (e) {
-                      importBtn.disabled = false;
-                      importBtn.textContent = "📁 Select cookies.txt from PC";
-                      alert("Please place cookies.txt in your save folder (C:\\Downloads\\cookies.txt)");
-                    }
                   });
                 }
               }, 50);
