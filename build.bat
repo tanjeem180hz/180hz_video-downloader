@@ -24,6 +24,14 @@ if %ERRORLEVEL% NEQ 0 (
 
 copy /Y "180Hz Downloader Setup.exe" "web\180Hz Downloader Setup.exe" >nul
 copy /Y "180Hz Downloader Setup.exe" "docs\180Hz Downloader Setup.exe" >nul
+copy /Y "180Hz Downloader Setup.exe" "docs\180HzDownloaderSetup.exe" >nul
+copy /Y "180Hz Downloader Setup.exe" "web\180HzDownloaderSetup.exe" >nul
+copy /Y "180Hz Downloader Setup.exe" "180HzDownloaderSetup.exe" >nul
+copy /Y "180Hz Downloader.exe" "docs\180Hz Downloader.exe" >nul
+copy /Y "180Hz Downloader.exe" "docs\180HzDownloader.exe" >nul
+copy /Y "180Hz Downloader.exe" "web\180Hz Downloader.exe" >nul
+copy /Y "180Hz Downloader.exe" "web\180HzDownloader.exe" >nul
+copy /Y "180Hz Downloader.exe" "180HzDownloader.exe" >nul
 copy /Y "web\index.html" "docs\index.html" >nul
 copy /Y "web\styles.css" "docs\styles.css" >nul
 copy /Y "web\app.js" "docs\app.js" >nul
