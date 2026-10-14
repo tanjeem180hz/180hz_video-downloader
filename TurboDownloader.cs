@@ -277,28 +277,11 @@ namespace TurboDownloader
         {
             try
             {
-                // 1. Check if user provided manual authenticated cookies in Downloads folder
-                string manualUserCookie = Path.Combine(saveDir ?? "", "cookies.txt");
-                if (File.Exists(manualUserCookie) && new FileInfo(manualUserCookie).Length > 10)
-                {
-                    try
-                    {
-                        string manualText = File.ReadAllText(manualUserCookie);
-                        if (manualText.IndexOf("LOGIN_INFO", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                            manualText.IndexOf("SAPISID", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                            manualText.IndexOf("SSID", StringComparison.OrdinalIgnoreCase) >= 0)
-                        {
-                            return manualUserCookie;
-                        }
-                    }
-                    catch { }
-                }
-
-                // 2. Determine target path for cookies.txt
-                string cookiesPath = Path.Combine(appDir ?? "", "cookies.txt");
+                // Determine target path for youtube_visitor_cookies.txt
+                string cookiesPath = Path.Combine(appDir ?? "", "youtube_visitor_cookies.txt");
                 if (string.IsNullOrEmpty(appDir) || !Directory.Exists(appDir))
                 {
-                    cookiesPath = Path.Combine(saveDir ?? Path.GetTempPath(), "cookies.txt");
+                    cookiesPath = Path.Combine(Path.GetTempPath(), "180hz_yt_visitor_cookies.txt");
                 }
 
                 lock (cookieLock)
@@ -312,7 +295,7 @@ namespace TurboDownloader
                         }
                     }
 
-                    // 3. Fetch fresh visitor session cookies from YouTube guest endpoints
+                    // Fetch fresh visitor session cookies from YouTube guest endpoints
                     CookieContainer container = new CookieContainer();
                     string[] endpoints = new string[] { "https://www.youtube.com/sw.js", "https://www.youtube.com/" };
                     CookieCollection cc = null;
@@ -357,7 +340,7 @@ namespace TurboDownloader
                         }
                         catch
                         {
-                            string fallback = Path.Combine(Path.GetTempPath(), "180hz_yt_cookies.txt");
+                            string fallback = Path.Combine(Path.GetTempPath(), "180hz_yt_visitor_cookies.txt");
                             File.WriteAllText(fallback, sb.ToString(), Encoding.ASCII);
                             lastCookieFetch = DateTime.UtcNow;
                             return fallback;
@@ -373,6 +356,165 @@ namespace TurboDownloader
                 try { File.AppendAllText(Path.Combine(appDir ?? "", "cookies.log"), DateTime.UtcNow.ToString("o") + " [EnsureYouTubeVisitorCookies] " + ex.Message + "\r\n"); } catch { }
             }
 
+            return null;
+        }
+
+        private static string ResolveUserPlatformCookies(string targetUrl = "", string customSaveDir = null)
+        {
+            try
+            {
+                string effectiveSave = GetEffectiveWritableSaveDir();
+                string[] candidates = new string[]
+                {
+                    Path.Combine(customSaveDir ?? "", "cookies.txt"),
+                    Path.Combine(effectiveSave ?? "", "cookies.txt"),
+                    Path.Combine(saveDir ?? "", "cookies.txt"),
+                    Path.Combine(appDir ?? "", "cookies.txt"),
+                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", "cookies.txt"),
+                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "180Hz Downloader", "cookies.txt")
+                };
+
+                foreach (string candidate in candidates)
+                {
+                    if (!string.IsNullOrEmpty(candidate) && File.Exists(candidate))
+                    {
+                        FileInfo fi = new FileInfo(candidate);
+                        if (fi.Length > 20)
+                        {
+                            return candidate;
+                        }
+                    }
+                }
+            }
+            catch { }
+            return null;
+        }
+
+        private static bool SaveCookiesContent(string input)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(input)) return false;
+                string trimmed = input.Trim();
+                StringBuilder sb = new StringBuilder();
+
+                if (trimmed.IndexOf("# Netscape", StringComparison.OrdinalIgnoreCase) >= 0 || trimmed.Contains("\t"))
+                {
+                    sb.Append(trimmed);
+                }
+                else
+                {
+                    sb.AppendLine("# Netscape HTTP Cookie File");
+                    sb.AppendLine("# Generated by 180Hz Downloader Cookie Assistant");
+                    long expiry = (long)(DateTime.UtcNow.AddYears(1) - new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc)).TotalSeconds;
+                    if (trimmed.Contains("=") || trimmed.Contains(";"))
+                    {
+                        string[] parts = trimmed.Split(new char[] { ';' }, StringSplitOptions.RemoveEmptyEntries);
+                        foreach (string part in parts)
+                        {
+                            int eqIdx = part.IndexOf('=');
+                            if (eqIdx > 0)
+                            {
+                                string k = part.Substring(0, eqIdx).Trim();
+                                string v = part.Substring(eqIdx + 1).Trim();
+                                if (!string.IsNullOrEmpty(k) && !string.IsNullOrEmpty(v))
+                                {
+                                    sb.AppendLine(string.Format(".instagram.com\tTRUE\t/\tTRUE\t{0}\t{1}\t{2}", expiry, k, v));
+                                }
+                            }
+                        }
+                    }
+                    else
+                    {
+                        sb.AppendLine(string.Format(".instagram.com\tTRUE\t/\tTRUE\t{0}\tsessionid\t{1}", expiry, trimmed));
+                    }
+                }
+
+                string textToWrite = sb.ToString();
+                string effectiveSave = GetEffectiveWritableSaveDir();
+                try
+                {
+                    if (!Directory.Exists(effectiveSave)) Directory.CreateDirectory(effectiveSave);
+                    File.WriteAllText(Path.Combine(effectiveSave, "cookies.txt"), textToWrite, Encoding.UTF8);
+                }
+                catch { }
+
+                if (!string.IsNullOrEmpty(appDir) && Directory.Exists(appDir))
+                {
+                    try
+                    {
+                        File.WriteAllText(Path.Combine(appDir, "cookies.txt"), textToWrite, Encoding.UTF8);
+                    }
+                    catch { }
+                }
+
+                string localApp = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "180Hz Downloader");
+                if (Directory.Exists(localApp))
+                {
+                    try
+                    {
+                        File.WriteAllText(Path.Combine(localApp, "cookies.txt"), textToWrite, Encoding.UTF8);
+                    }
+                    catch { }
+                }
+
+                return true;
+            }
+            catch { }
+            return false;
+        }
+
+        private static string PromptUserForCookiesFile()
+        {
+            string selectedFile = null;
+            Thread staThread = new Thread(() =>
+            {
+                try
+                {
+                    using (Form topForm = new Form())
+                    {
+                        topForm.TopMost = true;
+                        topForm.ShowInTaskbar = false;
+                        topForm.FormBorderStyle = FormBorderStyle.None;
+                        topForm.StartPosition = FormStartPosition.CenterScreen;
+                        topForm.Size = new Size(1, 1);
+                        topForm.Opacity = 0;
+                        topForm.Show();
+                        topForm.Focus();
+                        topForm.BringToFront();
+                        topForm.Activate();
+
+                        using (OpenFileDialog ofd = new OpenFileDialog())
+                        {
+                            ofd.Title = "Select cookies.txt file for 180Hz Downloader";
+                            ofd.Filter = "Cookie Text Files (*.txt)|*.txt|All Files (*.*)|*.*";
+                            ofd.CheckFileExists = true;
+                            ofd.Multiselect = false;
+                            DialogResult result = ofd.ShowDialog(topForm);
+                            if (result == DialogResult.OK && !string.IsNullOrEmpty(ofd.FileName))
+                            {
+                                selectedFile = ofd.FileName;
+                            }
+                        }
+                        topForm.Close();
+                    }
+                }
+                catch { }
+            });
+            staThread.SetApartmentState(ApartmentState.STA);
+            staThread.Start();
+            staThread.Join(60000);
+
+            if (!string.IsNullOrEmpty(selectedFile) && File.Exists(selectedFile))
+            {
+                try
+                {
+                    string content = File.ReadAllText(selectedFile);
+                    SaveCookiesContent(content);
+                    return selectedFile;
+                }
+                catch { }
+            }
             return null;
         }
 
@@ -486,8 +628,9 @@ namespace TurboDownloader
             return !string.IsNullOrEmpty(appDir) && IsDirectoryWritable(appDir) ? appDir : Path.GetTempPath();
         }
 
-        private static string GetEffectiveWritableSaveDir(string targetDir)
+        private static string GetEffectiveWritableSaveDir(string targetDir = null)
         {
+            if (string.IsNullOrEmpty(targetDir)) targetDir = saveDir;
             if (string.IsNullOrEmpty(targetDir)) return GetDefaultDownloadsFolder();
             try
             {
@@ -655,9 +798,20 @@ namespace TurboDownloader
             }
         }
 
+        private static void LogTrace(string msg)
+        {
+            try
+            {
+                string traceFile = Path.Combine(Path.GetTempPath(), "180hz_boot_trace.log");
+                File.AppendAllText(traceFile, DateTime.Now.ToString("HH:mm:ss.fff") + " " + msg + "\r\n");
+            }
+            catch { }
+        }
+
         [STAThread]
         static void Main(string[] args)
         {
+            LogTrace("Main start. Args: " + (args != null ? string.Join(" ", args) : "none"));
             try
             {
                 Application.EnableVisualStyles();
@@ -667,6 +821,7 @@ namespace TurboDownloader
                 {
                     try
                     {
+                        LogTrace("UnhandledException: " + (e.ExceptionObject != null ? e.ExceptionObject.ToString() : "null"));
                         File.WriteAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "crash.log"), (e.ExceptionObject != null ? e.ExceptionObject.ToString() : "Unknown error"));
                     }
                     catch { }
@@ -849,6 +1004,7 @@ namespace TurboDownloader
                     try { appMutex = new Mutex(true, "Local\\180HzDownloader_SingleInstance", out createdNew); } catch { createdNew = true; }
                 }
 
+                LogTrace("Mutex check: createdNew=" + createdNew + ", isRestartedFromUpdate=" + isRestartedFromUpdate);
                 if (!createdNew && !isRestartedFromUpdate)
                 {
                     Process currentProc = Process.GetCurrentProcess();
@@ -873,6 +1029,7 @@ namespace TurboDownloader
 
                     if (anotherIsRunning)
                     {
+                        LogTrace("Another instance is running. Exiting after LaunchNativeWindow.");
                         int existingPort = 4000;
                         if (File.Exists(portFilePath))
                         {
@@ -895,11 +1052,14 @@ namespace TurboDownloader
                 catch { }
 
                 // Start HTTP Server
+                LogTrace("Calling StartHttpServer()...");
                 if (!StartHttpServer())
                 {
+                    LogTrace("Failed to bind HTTP server to any candidate port.");
                     File.WriteAllText(Path.Combine(appDir, "crash.log"), "Failed to bind HTTP server to any candidate port.");
                     return;
                 }
+                LogTrace("HTTP Server started on port " + port);
 
                 // Save active port
                 try { File.WriteAllText(portFilePath, port.ToString()); } catch { }
@@ -957,7 +1117,6 @@ namespace TurboDownloader
                 try
                 {
                     l.Prefixes.Add(string.Format("http://127.0.0.1:{0}/", candidate));
-                    try { l.Prefixes.Add(string.Format("http://localhost:{0}/", candidate)); } catch { }
                     l.Start();
                     listener = l;
                     port = candidate;
@@ -1059,21 +1218,27 @@ namespace TurboDownloader
                 trayIcon.ContextMenu = menu;
                 trayIcon.DoubleClick += (s, e) => LaunchNativeWindow(port);
 
-                Application.Run(new ApplicationContext());
+                LogTrace("RunTrayApp: Calling Application.Run()...");
+                Application.Run();
+                LogTrace("RunTrayApp: Application.Run() returned.");
             }
             catch (Exception ex)
             {
+                LogTrace("RunTrayApp catch: " + ex);
                 try { File.AppendAllText(Path.Combine(appDir, "tray.log"), ex.ToString() + "\r\n"); } catch { }
             }
 
+            LogTrace("RunTrayApp: entering while loop. listener=" + (listener != null) + ", isListening=" + (listener != null && listener.IsListening));
             while (listener != null && listener.IsListening)
             {
                 Thread.Sleep(2000);
             }
+            LogTrace("RunTrayApp: exited while loop.");
         }
 
         private static void CleanUp()
         {
+            LogTrace("CleanUp called. Stack: " + Environment.StackTrace);
             try
             {
                 if (trayIcon != null)
@@ -1400,6 +1565,68 @@ namespace TurboDownloader
                     SendJson(res, new { success = true });
                     return;
                 }
+                else if (rawUrl == "/api/v1/system/select-cookies-file" && req.HttpMethod == "POST")
+                {
+                    string chosen = PromptUserForCookiesFile();
+                    SendJson(res, new {
+                        success = !string.IsNullOrEmpty(chosen),
+                        filePath = chosen ?? "",
+                        message = !string.IsNullOrEmpty(chosen) ? "Cookies imported successfully." : "Cookie selection cancelled."
+                    });
+                    return;
+                }
+                else if (rawUrl == "/api/v1/system/save-cookies-text" && req.HttpMethod == "POST")
+                {
+                    string body = ReadBody(req);
+                    bool ok = false;
+                    try
+                    {
+                        var ser = new JavaScriptSerializer();
+                        var dict = ser.Deserialize<Dictionary<string, object>>(body);
+                        if (dict != null && dict.ContainsKey("content"))
+                        {
+                            ok = SaveCookiesContent(dict["content"].ToString());
+                        }
+                    }
+                    catch { }
+                    SendJson(res, new {
+                        success = ok,
+                        message = ok ? "Session cookies saved successfully." : "Failed to save cookies."
+                    });
+                    return;
+                }
+                else if (rawUrl == "/api/v1/system/cookies-status" && req.HttpMethod == "GET")
+                {
+                    string cookiesFile = ResolveUserPlatformCookies("", saveDir);
+                    bool exists = !string.IsNullOrEmpty(cookiesFile) && File.Exists(cookiesFile);
+                    bool hasInstagram = false;
+                    bool hasYouTube = false;
+                    bool hasFacebook = false;
+                    long sizeBytes = 0;
+                    if (exists)
+                    {
+                        try
+                        {
+                            FileInfo fi = new FileInfo(cookiesFile);
+                            sizeBytes = fi.Length;
+                            string txt = File.ReadAllText(cookiesFile);
+                            hasInstagram = txt.IndexOf("sessionid", StringComparison.OrdinalIgnoreCase) >= 0 || txt.IndexOf(".instagram.com", StringComparison.OrdinalIgnoreCase) >= 0;
+                            hasYouTube = txt.IndexOf("SAPISID", StringComparison.OrdinalIgnoreCase) >= 0 || txt.IndexOf("LOGIN_INFO", StringComparison.OrdinalIgnoreCase) >= 0;
+                            hasFacebook = txt.IndexOf("c_user", StringComparison.OrdinalIgnoreCase) >= 0;
+                        }
+                        catch { }
+                    }
+                    SendJson(res, new {
+                        success = true,
+                        hasCookies = exists,
+                        path = cookiesFile ?? "",
+                        sizeBytes = sizeBytes,
+                        hasInstagram = hasInstagram,
+                        hasYouTube = hasYouTube,
+                        hasFacebook = hasFacebook
+                    });
+                    return;
+                }
                 else if ((rawUrl == "/api/v1/system/check-update" || rawUrl.StartsWith("/api/v1/system/check-update?")) && (req.HttpMethod == "GET" || req.HttpMethod == "POST"))
                 {
                     HandleCheckUpdate(res);
@@ -1615,17 +1842,12 @@ namespace TurboDownloader
             {
                 extArgs += " --add-header \"Accept-Language:en-US,en;q=0.9\"";
             }
-            string cookiesPath = null;
-            if (isYouTube)
+            string cookiesPath = ResolveUserPlatformCookies(safeUrl, saveDir);
+            if (string.IsNullOrEmpty(cookiesPath) && isYouTube)
             {
                 cookiesPath = EnsureYouTubeVisitorCookies();
             }
-            else
-            {
-                cookiesPath = Path.Combine(appDir, "cookies.txt");
-                if (!File.Exists(cookiesPath)) cookiesPath = Path.Combine(saveDir, "cookies.txt");
-            }
-            string cookiesArg = (cookiesPath != null && File.Exists(cookiesPath)) ? string.Format("--cookies \"{0}\"", cookiesPath) : "";
+            string cookiesArg = (!string.IsNullOrEmpty(cookiesPath) && File.Exists(cookiesPath)) ? string.Format("--cookies \"{0}\"", cookiesPath) : "";
 
             ProcessStartInfo psi = new ProcessStartInfo();
             psi.FileName = ytdlp;
@@ -2176,17 +2398,12 @@ namespace TurboDownloader
             {
                 extArgs += " --add-header \"Accept:text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8\"";
             }
-            string cookiesPath = null;
-            if (isYouTube)
+            string cookiesPath = ResolveUserPlatformCookies(safeUrl, effectiveSaveDir);
+            if (string.IsNullOrEmpty(cookiesPath) && isYouTube)
             {
                 cookiesPath = EnsureYouTubeVisitorCookies();
             }
-            else
-            {
-                cookiesPath = Path.Combine(appDir, "cookies.txt");
-                if (!File.Exists(cookiesPath)) cookiesPath = Path.Combine(effectiveSaveDir, "cookies.txt");
-            }
-            string cookiesArg = (cookiesPath != null && File.Exists(cookiesPath)) ? string.Format("--cookies \"{0}\"", cookiesPath) : "";
+            string cookiesArg = (!string.IsNullOrEmpty(cookiesPath) && File.Exists(cookiesPath)) ? string.Format("--cookies \"{0}\"", cookiesPath) : "";
 
             string faststartArg = !isAudio ? "--postprocessor-args \"ffmpeg:-movflags faststart\"" : "";
 
