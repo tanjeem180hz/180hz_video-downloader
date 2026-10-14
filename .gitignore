@@ -12,6 +12,7 @@ yt-dlp.exe
 *.tmp
 save_folder.cfg
 cookies.txt
+*cookies*.txt
 
 # User downloads folder contents if any
 *.mp4

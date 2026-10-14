@@ -17,7 +17,7 @@
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
-    <link rel="stylesheet" href="styles.css?v=3.5.0" />
+    <link rel="stylesheet" href="styles.css?v=3.6.0" />
     <script>window.FLOWDOWN_API_URL = window.location.origin + '/api/v1';</script>
   </head>
   <body class="noise">
@@ -38,11 +38,11 @@
         <span>180<span class="nav-hz">Hz</span> <em>DOWNLOADER</em></span>
       </div>
       <nav class="nav-meta">
-        <!-- Update button: shown ONLY when an update is available on GitHub -->
-        <button type="button" id="navUpdateBtn" class="nav-update-btn hidden" title="New update available on GitHub">
-          <span class="nav-update-pulse"></span>
+        <!-- Compact Update Button beside GitHub -->
+        <button type="button" id="navUpdateBtn" class="nav-update-pill" title="Check & Install 180Hz Downloader Updates">
+          <span class="nav-update-dot" id="navUpdateDot"></span>
           <svg viewBox="0 0 24 24" class="ico-up" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-          <span>UPDATE (<span id="navUpdateVer">v2.1.1</span>)</span>
+          <span id="navUpdateText">UPDATE</span>
         </button>
         <a href="https://github.com/tanjeem180hz/180hz_video-downloader" target="_blank" rel="noopener noreferrer" class="nav-cta">GitHub</a>
       </nav>
@@ -348,51 +348,6 @@
         </div>
       </div>
 
-      <!-- Dedicated App Auto-Update Section (100% Live GitHub Auto-Sync & Self-Update) -->
-      <div id="appUpdateSection" class="app-update-bar">
-        <div class="app-update-left">
-          <div id="updateIconWrap" class="app-update-icon-wrap">
-            <svg viewBox="0 0 24 24" class="ico" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
-              <polyline points="23 4 23 10 17 10"/>
-              <polyline points="1 20 1 14 7 14"/>
-              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
-            </svg>
-          </div>
-          <div class="app-update-info">
-            <div class="app-update-label-row">
-              <span class="app-update-title">APP AUTO-UPDATE ENGINE</span>
-              <span id="updateSectionBadge" class="update-status-badge ok">UP TO DATE · v2.2.0</span>
-            </div>
-            <div id="updateSectionSubtext" class="app-update-subtext">
-              Connected to GitHub Live Release · Automatic updates active
-            </div>
-            <div id="updateSectionProgressWrap" class="update-progress-track hidden">
-              <div id="updateSectionProgressFill" class="update-progress-fill" style="width: 0%;"></div>
-            </div>
-          </div>
-        </div>
-        <div class="app-update-actions">
-          <button type="button" id="autoUpdateToggleBtn" class="auto-update-pill active" title="Toggle Automatic Background Update ON/OFF">
-            <span class="auto-dot"></span>
-            <span id="autoUpdateToggleText">Auto: ON</span>
-          </button>
-          <button type="button" id="checkUpdateNowBtn" class="update-bar-btn secondary" title="Check GitHub for new updates now">
-            <svg viewBox="0 0 24 24" class="ico" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="11" cy="11" r="8"/>
-              <line x1="21" y1="21" x2="16.65" y2="16.65"/>
-            </svg>
-            <span id="checkUpdateBtnText">Check</span>
-          </button>
-          <button type="button" id="applyUpdateNowBtn" class="update-bar-btn primary" title="Download & install latest update from GitHub and restart automatically">
-            <svg viewBox="0 0 24 24" class="ico" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-              <polyline points="7 10 12 15 17 10"/>
-              <line x1="12" y1="15" x2="12" y2="3"/>
-            </svg>
-            <span id="applyUpdateBtnText">Update Now</span>
-          </button>
-        </div>
-      </div>
 
       <div id="probeSteps" class="steps hidden">
         <div class="step" data-step="0"><i></i>RESOLVING ADDRESS</div>

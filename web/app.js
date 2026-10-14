@@ -2348,6 +2348,26 @@ async function triggerSaveAs(url, filename) {
           progFill.style.width = "0%";
         }
       }
+      // Synchronize compact top nav update button (Beside GitHub)
+      const navBtn = document.getElementById("navUpdateBtn");
+      const navText = document.getElementById("navUpdateText");
+      if (navBtn) {
+        navBtn.classList.toggle("has-update", Boolean(hasUpdate && !updating));
+        navBtn.classList.toggle("updating", Boolean(updating));
+        navBtn.classList.toggle("checking", Boolean(spinning && !updating));
+      }
+      if (navText) {
+        if (updating) {
+          navText.textContent = typeof progress === "number" && progress > 0 ? `UPDATING ${progress}%` : "UPDATING…";
+        } else if (hasUpdate) {
+          const v = (updateData && (updateData.version || updateData.latestVersion)) || "";
+          navText.textContent = v ? `UPDATE (v${v})` : "UPDATE NOW";
+        } else if (spinning) {
+          navText.textContent = "CHECKING…";
+        } else {
+          navText.textContent = "UPDATE";
+        }
+      }
     }
 
     async function checkGithubVersion(manual = false) {
@@ -2356,9 +2376,11 @@ async function triggerSaveAs(url, filename) {
 
       const checkBtn = document.getElementById("checkUpdateNowBtn");
       const checkBtnText = document.getElementById("checkUpdateBtnText");
+      const navText = document.getElementById("navUpdateText");
       if (manual) {
         if (checkBtn) checkBtn.disabled = true;
         if (checkBtnText) checkBtnText.textContent = "Checking…";
+        if (navText) navText.textContent = "CHECKING…";
         setSectionState({
           badgeText: "CHECKING GITHUB…",
           badgeType: "updating",
@@ -2468,6 +2490,19 @@ async function triggerSaveAs(url, filename) {
         });
         const applyBtnText = document.getElementById("applyUpdateBtnText");
         if (applyBtnText) applyBtnText.textContent = "Update Now";
+
+        if (manual) {
+          const navText = document.getElementById("navUpdateText");
+          if (navText) {
+            navText.textContent = "✓ UP TO DATE";
+            setTimeout(() => {
+              if (!isUpdating && !isUpdateAvailable) {
+                const nt = document.getElementById("navUpdateText");
+                if (nt) nt.textContent = "UPDATE";
+              }
+            }, 2500);
+          }
+        }
       }
     }
 
@@ -2478,20 +2513,20 @@ async function triggerSaveAs(url, filename) {
     function applyUpdateGate(latestVersion, data) {
       const gateCard = document.getElementById("updateGateCard");
       const navBtn = document.getElementById("navUpdateBtn");
+      const navText = document.getElementById("navUpdateText");
       const gateCurrent = document.getElementById("gateCurrentVer");
       const gateLatest = document.getElementById("gateLatestVer");
-      const navVer = document.getElementById("navUpdateVer");
       const changelog = document.getElementById("gateChangelog");
 
       if (gateCurrent) gateCurrent.textContent = `v${currentVersion}`;
       if (gateLatest) gateLatest.textContent = `v${latestVersion}`;
-      if (navVer) navVer.textContent = `v${latestVersion}`;
+      if (navText) navText.textContent = `UPDATE (v${latestVersion})`;
       if (changelog && data && data.changelog) {
         changelog.textContent = `Release notes: ${data.changelog}`;
       }
 
       if (gateCard) gateCard.classList.remove("hidden");
-      if (navBtn) navBtn.classList.remove("hidden");
+      if (navBtn) navBtn.classList.add("has-update");
     }
 
     function removeUpdateGate() {
@@ -2509,7 +2544,7 @@ async function triggerSaveAs(url, filename) {
       const gateCard = document.getElementById("updateGateCard");
       const navBtn = document.getElementById("navUpdateBtn");
       if (gateCard) gateCard.classList.add("hidden");
-      if (navBtn) navBtn.classList.add("hidden");
+      if (navBtn) navBtn.classList.remove("has-update");
     }
 
     function waitForEngineRestartAndReload() {
@@ -2675,6 +2710,8 @@ async function triggerSaveAs(url, filename) {
         if (gateBtn) gateBtn.disabled = false;
         if (gateBtnText) gateBtnText.textContent = "UPDATE NOW & RESTART";
         if (navBtn) navBtn.disabled = false;
+        const navText = document.getElementById("navUpdateText");
+        if (navText) navText.textContent = isUpdateAvailable ? "UPDATE NOW" : "UPDATE";
         if (applyBtn) applyBtn.disabled = false;
         if (applyBtnText) applyBtnText.textContent = "Update Now";
         if (checkBtn) checkBtn.disabled = false;
@@ -2749,7 +2786,12 @@ async function triggerSaveAs(url, filename) {
       if (navBtn) {
         navBtn.addEventListener("click", (e) => {
           e.preventDefault();
-          executeUpdate();
+          if (isUpdating) return;
+          if (isUpdateAvailable) {
+            executeUpdate();
+          } else {
+            checkGithubVersion(true);
+          }
         });
       }
 
