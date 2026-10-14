@@ -1294,7 +1294,7 @@ body.lamp-on .main-workspace {
 .nav-update-btn {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
+  gap: 6px;
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid var(--line);
   color: var(--bone);
@@ -1329,17 +1329,6 @@ body.lamp-on .main-workspace {
   transform: translateY(-1px);
 }
 
-.nav-update-dot,
-.nav-update-pulse {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: #39e58c;
-  box-shadow: 0 0 6px rgba(57, 229, 140, 0.55);
-  flex-shrink: 0;
-  transition: background 0.3s ease, box-shadow 0.3s ease;
-}
-
 .nav-update-pill.checking,
 .nav-update-btn.checking {
   border-color: rgba(216, 255, 62, 0.4);
@@ -1357,13 +1346,6 @@ body.lamp-on .main-workspace {
   background: rgba(255, 185, 35, 0.12);
   color: #ffd033;
   box-shadow: 0 0 14px rgba(255, 185, 35, 0.25);
-}
-
-.nav-update-pill.has-update .nav-update-dot,
-.nav-update-btn.has-update .nav-update-pulse {
-  background: #ffb923;
-  box-shadow: 0 0 8px #ffb923;
-  animation: pulseDot 1.4s ease-in-out infinite;
 }
 
 .nav-update-pill.has-update:hover,
@@ -1386,22 +1368,9 @@ body.lamp-on .main-workspace {
   animation: spinSlow 1s linear infinite;
 }
 
-.nav-update-pill.updating .nav-update-dot,
-.nav-update-btn.updating .nav-update-pulse {
-  background: var(--lime);
-  box-shadow: 0 0 8px var(--lime);
-  animation: pulseDot 0.8s ease-in-out infinite;
-}
-
 @keyframes spinSlow {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
-}
-
-@keyframes pulseDot {
-  0% { transform: scale(0.9); opacity: 0.7; }
-  50% { transform: scale(1.35); opacity: 1; box-shadow: 0 0 10px currentColor; }
-  100% { transform: scale(0.9); opacity: 0.7; }
 }
 
 /* Mandatory Version Gate Card (Shown ONLY when update is available) */

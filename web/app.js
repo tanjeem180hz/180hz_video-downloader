@@ -2432,6 +2432,10 @@ async function triggerSaveAs(url, filename) {
         isChecking = false;
         if (checkBtn) checkBtn.disabled = false;
         if (checkBtnText) checkBtnText.textContent = "Check";
+        if (manual && !isUpdateAvailable && !isUpdating) {
+          const navBtn = document.getElementById("navUpdateBtn");
+          if (navBtn) navBtn.classList.remove("checking");
+        }
       }
     }
 
@@ -2493,6 +2497,8 @@ async function triggerSaveAs(url, filename) {
 
         if (manual) {
           const navText = document.getElementById("navUpdateText");
+          const navBtn = document.getElementById("navUpdateBtn");
+          if (navBtn) navBtn.classList.remove("checking");
           if (navText) {
             navText.textContent = "✓ UP TO DATE";
             setTimeout(() => {
@@ -2500,7 +2506,7 @@ async function triggerSaveAs(url, filename) {
                 const nt = document.getElementById("navUpdateText");
                 if (nt) nt.textContent = "UPDATE";
               }
-            }, 2500);
+            }, 2200);
           }
         }
       }
