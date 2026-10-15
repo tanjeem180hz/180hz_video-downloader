@@ -2851,35 +2851,6 @@ namespace TurboDownloader
             res.Close();
         }
 
-        private static string FindSystemVideoPlayer()
-        {
-            string[] candidatePaths = new string[]
-            {
-                // 1. VLC Media Player (Universal player, decodes AV1, VP9, HEVC, H.264, 4K/8K)
-                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "VideoLAN", "VLC", "vlc.exe"),
-                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "VideoLAN", "VLC", "vlc.exe"),
-                // 2. PotPlayer
-                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "DAUM", "PotPlayer", "PotPlayer64.exe"),
-                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "DAUM", "PotPlayer", "PotPlayer.exe"),
-                // 3. MPC-HC / MPC-BE
-                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "MPC-HC", "mpc-hc64.exe"),
-                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "K-Lite Codec Pack", "MPC-HC64", "mpc-hc64.exe"),
-                // 4. Windows Media Player (Classic)
-                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Windows Media Player", "wmplayer.exe"),
-                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "Windows Media Player", "wmplayer.exe")
-            };
-
-            foreach (string p in candidatePaths)
-            {
-                try
-                {
-                    if (!string.IsNullOrEmpty(p) && File.Exists(p)) return p;
-                }
-                catch { }
-            }
-            return null;
-        }
-
         // ==========================================
         //  API: /api/v1/downloads/{id}/open
         // ==========================================
@@ -2891,113 +2862,58 @@ namespace TurboDownloader
                 DownloadJob job = jobs[id];
                 if (!string.IsNullOrEmpty(job.filePath) && File.Exists(job.filePath))
                 {
-                    string fullPath = Path.GetFullPath(job.filePath);
-                    string fullSaveDir = Path.GetFullPath(saveDir);
-                    string fullAppDir = Path.GetFullPath(appDir);
-                    if (fullPath.StartsWith(fullSaveDir, StringComparison.OrdinalIgnoreCase) ||
-                        fullPath.StartsWith(fullAppDir, StringComparison.OrdinalIgnoreCase))
+                    if (target == "file")
                     {
-                        if (target == "file")
+                        // Open directly using Windows Settings Default Player (Movies & TV, Windows Media Player, VLC, PotPlayer, etc.)
+                        try
                         {
-                            string ext = Path.GetExtension(job.filePath).ToLowerInvariant();
-                            bool isVideo = (ext == ".mp4" || ext == ".webm" || ext == ".mkv" || ext == ".avi" || ext == ".mov");
-
-                            if (isVideo)
-                            {
-                                string dedicatedPlayer = FindSystemVideoPlayer();
-                                if (!string.IsNullOrEmpty(dedicatedPlayer))
-                                {
-                                    try
-                                    {
-                                        ProcessStartInfo psi = new ProcessStartInfo();
-                                        psi.FileName = dedicatedPlayer;
-                                        psi.Arguments = string.Format("\"{0}\"", job.filePath);
-                                        psi.UseShellExecute = false;
-                                        Process.Start(psi);
-                                        launched = true;
-                                    }
-                                    catch { }
-                                }
-
-                                if (!launched)
-                                {
-                                    try
-                                    {
-                                        ProcessStartInfo psi = new ProcessStartInfo();
-                                        psi.FileName = job.filePath;
-                                        psi.UseShellExecute = true;
-                                        Process.Start(psi);
-                                        launched = true;
-                                    }
-                                    catch
-                                    {
-                                        try
-                                        {
-                                            ProcessStartInfo psi = new ProcessStartInfo();
-                                            psi.FileName = "explorer.exe";
-                                            psi.Arguments = string.Format("/select,\"{0}\"", job.filePath);
-                                            psi.UseShellExecute = true;
-                                            Process.Start(psi);
-                                            launched = true;
-                                        }
-                                        catch { }
-                                    }
-                                }
-                            }
-                            else
-                            {
-                                try
-                                {
-                                    ProcessStartInfo psi = new ProcessStartInfo();
-                                    psi.FileName = job.filePath;
-                                    psi.UseShellExecute = true;
-                                    Process.Start(psi);
-                                    launched = true;
-                                }
-                                catch
-                                {
-                                    try
-                                    {
-                                        ProcessStartInfo psi = new ProcessStartInfo();
-                                        psi.FileName = "explorer.exe";
-                                        psi.Arguments = string.Format("/select,\"{0}\"", job.filePath);
-                                        psi.UseShellExecute = true;
-                                        Process.Start(psi);
-                                        launched = true;
-                                    }
-                                    catch { }
-                                }
-                            }
+                            ProcessStartInfo psi = new ProcessStartInfo();
+                            psi.FileName = job.filePath;
+                            psi.WorkingDirectory = Path.GetDirectoryName(job.filePath);
+                            psi.UseShellExecute = true;
+                            psi.Verb = "open";
+                            psi.WindowStyle = ProcessWindowStyle.Normal;
+                            Process.Start(psi);
+                            launched = true;
                         }
-                        else
+                        catch
                         {
                             try
                             {
                                 ProcessStartInfo psi = new ProcessStartInfo();
                                 psi.FileName = "explorer.exe";
-                                psi.Arguments = string.Format("/select,\"{0}\"", job.filePath);
+                                psi.Arguments = string.Format("\"{0}\"", job.filePath);
                                 psi.UseShellExecute = true;
                                 Process.Start(psi);
                                 launched = true;
                             }
-                            catch
+                            catch { }
+                        }
+                    }
+                    else
+                    {
+                        // "View File": open folder in Windows Explorer and highlight the file
+                        try
+                        {
+                            ProcessStartInfo psi = new ProcessStartInfo();
+                            psi.FileName = "explorer.exe";
+                            psi.Arguments = string.Format("/select,\"{0}\"", job.filePath);
+                            psi.UseShellExecute = true;
+                            Process.Start(psi);
+                            launched = true;
+                        }
+                        catch
+                        {
+                            try
                             {
-                                try
+                                string dir = Path.GetDirectoryName(job.filePath);
+                                if (Directory.Exists(dir))
                                 {
-                                    string dir = Path.GetDirectoryName(job.filePath);
-                                    if (Directory.Exists(dir))
-                                    {
-                                        Process.Start("explorer.exe", dir);
-                                        launched = true;
-                                    }
-                                    else if (Directory.Exists(saveDir))
-                                    {
-                                        Process.Start("explorer.exe", saveDir);
-                                        launched = true;
-                                    }
+                                    Process.Start("explorer.exe", dir);
+                                    launched = true;
                                 }
-                                catch { }
                             }
+                            catch { }
                         }
                     }
                 }
