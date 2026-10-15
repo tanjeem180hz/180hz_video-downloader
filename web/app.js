@@ -732,8 +732,19 @@ async function triggerSaveAs(url, filename) {
   }
 
   async function analyzeViaBackend(url, provider) {
+    if (!isDesktopEnvironment()) {
+      await probeDesktopEngine();
+    }
+    if (!isDesktopEnvironment() && !window.DESKTOP_CONNECTED) {
+      let oembedEndpoint = null;
+      if (provider === "YouTube" || url.includes("youtube.com") || url.includes("youtu.be")) {
+        oembedEndpoint = "https://www.youtube.com/oembed?format=json&url=";
+      }
+      return await oembed(url, oembedEndpoint, provider);
+    }
+
     const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 25000);
+    const timer = setTimeout(() => ctrl.abort(), 20000);
     try {
       const res = await fetch(`${BACKEND_API_BASE}/media/analyze`, {
         method: "POST",
@@ -1435,6 +1446,26 @@ async function triggerSaveAs(url, filename) {
 
       const cacheKey = `${r.url}_${(fmt && fmt.formatId) || 'best'}_${(fmt && fmt.container) || 'mp4'}_${Boolean(fmt && fmt.audioOnly)}`;
 
+      // 1. Proactively verify engine availability
+      let liveEngine = isDesktopEnvironment();
+      if (!liveEngine) {
+        const found = await probeDesktopEngine();
+        if (found) liveEngine = true;
+      }
+
+      // 2. If web environment and engine is unreachable:
+      if (!liveEngine && !r.isLocalBackend) {
+        const tunnelUrl = getWebTunnelUrl(r.url, r.provider);
+        if (tunnelUrl) {
+          window.open(tunnelUrl, "_blank");
+        }
+        msg.className = "msg";
+        msg.textContent = "⚡ Web download stream opened! For lossless 4K & PC saving, launch 180Hz Downloader (.exe).";
+        setTimeout(() => { if (!isDownloading) msg.textContent = ""; }, 5500);
+        renderDesktopInstallerCard(fmt, true);
+        return;
+      }
+
       isDownloading = true;
       btn.disabled = true;
       cancel.classList.remove("hidden");
@@ -1453,9 +1484,9 @@ async function triggerSaveAs(url, filename) {
           btn.disabled = false;
           cancel.classList.add("hidden");
           fill.style.width = "0%";
-          text.textContent = "Download Video ▼";
+          updateButtonLabel();
           msg.className = "msg";
-          msg.textContent = "Folder selection cancelled. Select a folder on This PC to download.";
+          msg.textContent = "Folder selection cancelled. Click Download to choose a folder on This PC.";
           setTimeout(() => { if (!isDownloading) msg.textContent = ""; }, 4500);
           return;
         }
@@ -1474,11 +1505,26 @@ async function triggerSaveAs(url, filename) {
       };
 
       try {
-        const createRes = await fetch(`${BACKEND_API_BASE}/downloads`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload)
-        });
+        let createRes = null;
+        try {
+          createRes = await fetch(`${BACKEND_API_BASE}/downloads`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+          });
+        } catch (fetchErr) {
+          // If port shifted or connection dropped, retry with newly probed port
+          const probed = await probeDesktopEngine();
+          if (probed) {
+            createRes = await fetch(`${BACKEND_API_BASE}/downloads`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(payload)
+            });
+          } else {
+            throw fetchErr;
+          }
+        }
 
         if (!createRes.ok) {
           const errBody = await createRes.json().catch(() => ({}));
@@ -1515,7 +1561,7 @@ async function triggerSaveAs(url, filename) {
               btn.disabled = false;
               cancel.classList.add("hidden");
               fill.style.width = "0%";
-              text.textContent = "Download Video ▼";
+              updateButtonLabel();
 
               const errMsg = currentJob.errorMessage || "Processing failed during download.";
               const isPlatformProtected = errMsg.includes("empty media response") || errMsg.includes("cookies") || errMsg.includes("login") || errMsg.includes("bot") || errMsg.includes("restricted") || currentJob.errorCode === "AGE_RESTRICTED";
@@ -1562,13 +1608,24 @@ async function triggerSaveAs(url, filename) {
         fill.style.width = "0%";
         updateButtonLabel();
 
-        const errMsg = (err && err.message) ? err.message : "Failed to connect to local engine.";
+        // Always provide seamless web tunnel fallback so user NEVER sees INIT_FAILED / Failed to fetch!
         const tunnelUrl = getWebTunnelUrl(r.url, r.provider);
+        if (tunnelUrl) {
+          window.open(tunnelUrl, "_blank");
+          msg.className = "msg";
+          msg.textContent = "⚡ Web download stream opened! To download 4K/8K directly to This PC, run 180Hz Downloader (.exe).";
+          setTimeout(() => { if (!isDownloading) msg.textContent = ""; }, 5500);
+          if (!isDesktopEnvironment()) {
+            renderDesktopInstallerCard(fmt, true);
+          }
+          return;
+        }
 
+        const errMsg = (err && err.message) ? err.message : "Temporary connection hiccup.";
         errContainer.innerHTML = buildErrorCardHtml({
-          title: "Download Initiation Failed",
+          title: "Download Disconnected",
           cause: errMsg,
-          code: err.code || "INIT_FAILED",
+          code: err.code || "NET_RETRY",
           retryId: "retryDownloadBtn",
           retryText: "🔄 Retry Download",
           tunnelUrl: tunnelUrl,
@@ -1580,11 +1637,6 @@ async function triggerSaveAs(url, filename) {
           const rb = document.getElementById("retryDownloadBtn");
           if (rb) rb.addEventListener("click", () => executeDownload(selectedFormat));
         }, 50);
-
-        if (!isDesktopEnvironment() && !r.isLocalBackend) {
-          renderDesktopInstallerCard(fmt, true);
-        }
-        Ledger.bump(r.url);
       }
     }
 
@@ -1596,27 +1648,27 @@ async function triggerSaveAs(url, filename) {
       }
 
       let isRunning = false;
-      try {
-        const ctrl = new AbortController();
-        const t = setTimeout(() => ctrl.abort(), 1200);
-        const res = await fetch("http://127.0.0.1:4000/api/v1/health", { mode: "cors", signal: ctrl.signal });
-        clearTimeout(t);
-        if (res && res.ok) isRunning = true;
-      } catch {}
+      const probed = await probeDesktopEngine();
+      if (probed) isRunning = true;
 
       if (isRunning) {
-        window.open(`http://127.0.0.1:4000/?url=${encodeURIComponent(mediaUrl)}`, "_blank");
+        const localOrigin = new URL(BACKEND_API_BASE).origin;
+        window.open(`${localOrigin}/?url=${encodeURIComponent(mediaUrl)}`, "_blank");
       } else {
-        if (typeof localStorage !== "undefined") {
-          localStorage.setItem("180hzdownloader_installed", "true");
+        const tunnelUrl = getWebTunnelUrl(mediaUrl, r.provider);
+        if (tunnelUrl) {
+          window.open(tunnelUrl, "_blank");
         }
-        // Automatically trigger 1-click download of 180Hz Downloader Setup.exe
         const a = document.createElement("a");
         a.href = "180Hz Downloader Setup.exe";
         a.download = "180Hz Downloader Setup.exe";
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
+
+        msg.className = "msg";
+        msg.textContent = "⚡ Web download opened! Setup file downloaded for full 4K PC engine.";
+        setTimeout(() => { msg.textContent = ""; }, 5000);
 
         renderDesktopInstallerCard(selectedFormat);
       }

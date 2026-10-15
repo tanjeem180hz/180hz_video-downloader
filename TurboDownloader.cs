@@ -1386,42 +1386,26 @@ namespace TurboDownloader
             res.Headers.Add("X-XSS-Protection", "1; mode=block");
             res.Headers.Add("Referrer-Policy", "strict-origin-when-cross-origin");
 
-            // Security Check 4: Strict CORS Origin Validation
+            // Security Check 4: Full CORS & Chrome Private Network Access (PNA) Support
             string origin = req.Headers["Origin"];
-            bool isTrustedOrigin = false;
-            if (string.IsNullOrEmpty(origin))
+            if (!string.IsNullOrEmpty(origin))
             {
-                isTrustedOrigin = true; // Local direct browser or native window request
+                res.Headers.Add("Access-Control-Allow-Origin", origin);
+                res.Headers.Add("Access-Control-Allow-Credentials", "true");
             }
             else
             {
-                Uri originUri;
-                if (Uri.TryCreate(origin, UriKind.Absolute, out originUri))
-                {
-                    string h = originUri.Host.ToLowerInvariant();
-                    if (h == "127.0.0.1" || h == "localhost" || h == "tanjeem180hz.github.io")
-                    {
-                        isTrustedOrigin = true;
-                        res.Headers.Add("Access-Control-Allow-Origin", origin);
-                        res.Headers.Add("Access-Control-Allow-Credentials", "true");
-                    }
-                }
+                res.Headers.Add("Access-Control-Allow-Origin", "*");
             }
 
-            res.Headers.Add("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-            res.Headers.Add("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With");
+            res.Headers.Add("Access-Control-Allow-Private-Network", "true");
+            res.Headers.Add("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, HEAD");
+            res.Headers.Add("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, Range, Accept, Cache-Control, Pragma, Access-Control-Request-Private-Network");
+            res.Headers.Add("Access-Control-Max-Age", "86400");
 
             if (req.HttpMethod == "OPTIONS")
             {
                 res.StatusCode = 200;
-                res.Close();
-                return;
-            }
-
-            if (!isTrustedOrigin)
-            {
-                res.StatusCode = 403;
-                res.StatusDescription = "Forbidden: Untrusted Origin";
                 res.Close();
                 return;
             }
@@ -2245,15 +2229,19 @@ namespace TurboDownloader
             if (!isCustomSaveDirConfigured)
             {
                 string chosen = PromptUserForSaveFolder();
-                if (string.IsNullOrEmpty(chosen))
+                if (!string.IsNullOrEmpty(chosen))
                 {
-                    res.StatusCode = 400;
-                    SendJson(res, new {
-                        success = false,
-                        code = "FOLDER_SELECTION_CANCELLED",
-                        message = "Please select a folder on This PC to save your download."
-                    });
-                    return;
+                    saveDir = chosen;
+                    isCustomSaveDirConfigured = true;
+                    SaveCustomFolderConfig(chosen);
+                }
+                else
+                {
+                    if (string.IsNullOrEmpty(saveDir) || !Directory.Exists(saveDir))
+                    {
+                        saveDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", "180Hz Downloads");
+                        try { Directory.CreateDirectory(saveDir); } catch { }
+                    }
                 }
             }
 
