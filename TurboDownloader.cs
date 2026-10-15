@@ -1862,6 +1862,10 @@ namespace TurboDownloader
             {
                 extArgs += " --add-header \"Accept-Language:en-US,en;q=0.9\"";
             }
+            if (safeUrl.IndexOf("instagram.com", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                extArgs += " --add-header \"Accept:text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8\"";
+            }
             string cookiesPath = ResolveUserPlatformCookies(safeUrl, saveDir);
             if (string.IsNullOrEmpty(cookiesPath) && isYouTube)
             {
@@ -2013,16 +2017,19 @@ namespace TurboDownloader
                                     else if (width >= 640) height = 360;
                                 }
 
-                                string resLabel = height > 0 ? (height + "p") : formatId;
-                                if (height >= 4320 || width >= 7680) resLabel = "4320p / 8K";
-                                else if (height >= 2160 || width >= 3840) resLabel = "2160p / 4K";
-                                else if (height >= 1440 || width >= 2560) resLabel = "1440p / 2K";
-                                else if (height >= 1080 || width >= 1920) resLabel = "1080p / Full HD";
-                                else if (height >= 720 || width >= 1280) resLabel = "720p / HD";
-                                else if (height >= 480 || width >= 854) resLabel = "480p";
-                                else if (height >= 360 || width >= 640) resLabel = "360p";
-                                else if (height >= 240) resLabel = "240p";
-                                else if (height >= 144) resLabel = "144p";
+                                int shortSide = (width > 0 && height > 0) ? Math.Min(width, height) : (height > 0 ? height : width);
+                                int longSide = (width > 0 && height > 0) ? Math.Max(width, height) : (height > 0 ? height : width);
+
+                                string resLabel = shortSide > 0 ? (shortSide + "p") : (height > 0 ? (height + "p") : formatId);
+                                if (shortSide >= 4320 || longSide >= 7680) resLabel = "4320p / 8K";
+                                else if (shortSide >= 2160 || longSide >= 3840) resLabel = "2160p / 4K";
+                                else if (shortSide >= 1440 || longSide >= 2560) resLabel = "1440p / 2K";
+                                else if (shortSide >= 1080 || longSide >= 1920) resLabel = "1080p / Full HD";
+                                else if (shortSide >= 720 || longSide >= 1280) resLabel = "720p / HD";
+                                else if (shortSide >= 480 || longSide >= 854) resLabel = "480p";
+                                else if (shortSide >= 360 || longSide >= 640) resLabel = "360p";
+                                else if (shortSide >= 240) resLabel = "240p";
+                                else if (shortSide >= 144) resLabel = "144p";
 
                                 bool isHdr = false;
                                 if (f.ContainsKey("dynamic_range") && f["dynamic_range"] != null)
@@ -2350,15 +2357,54 @@ namespace TurboDownloader
                     if (hm2.Success) targetHeight = int.Parse(hm2.Groups[1].Value);
                 }
 
-                if (isFacebook && (safeFormatId.IndexOf("hd", StringComparison.OrdinalIgnoreCase) >= 0 || safeFormatId == "best"))
+                if (isInstagram || isFacebook)
                 {
-                    formatArg = "-f \"best[format_id*=hd]/best[ext=mp4]/bestvideo+bestaudio/best\" -S \"res,acodec:m4a\"";
-                    mergeArg = "--merge-output-format mp4";
-                }
-                else if (isFacebook && safeFormatId.IndexOf("sd", StringComparison.OrdinalIgnoreCase) >= 0)
-                {
-                    formatArg = "-f \"best[format_id*=sd][height<=480]/bestvideo[height<=480]+bestaudio/best[height<=480]/best\" -S \"res:480,acodec:m4a\"";
-                    mergeArg = "--merge-output-format mp4";
+                    // Instagram & Facebook: Pure Raw Max Quality Pipeline (4K / 8K DASH + Best Audio merged into MP4)
+                    if (string.IsNullOrEmpty(safeFormatId) || safeFormatId == "best" || safeFormatId == "max" || safeFormatId.IndexOf("hd", StringComparison.OrdinalIgnoreCase) >= 0)
+                    {
+                        formatArg = "-f \"bv*+ba/b\" -S \"res,fps,vcodec:hevc:av01:h264,br,acodec:m4a\"";
+                        mergeArg = "--merge-output-format mp4";
+                    }
+                    else if (safeFormatId.IndexOf("sd", StringComparison.OrdinalIgnoreCase) >= 0)
+                    {
+                        formatArg = "-f \"bv*[height<=480]+ba/bv*[width<=480]+ba/best[format_id*=sd][height<=480]/best[height<=480]/best\" -S \"res:480,acodec:m4a\"";
+                        mergeArg = "--merge-output-format mp4";
+                    }
+                    else if (targetHeight >= 2160 || safeFormatId.IndexOf("2160", StringComparison.OrdinalIgnoreCase) >= 0 || safeFormatId.IndexOf("4k", StringComparison.OrdinalIgnoreCase) >= 0)
+                    {
+                        // 4K tier (supports both horizontal 3840x2160 and vertical 2160x3840 Reels)
+                        formatArg = "-f \"bv*[height>=2160]+ba/bv*[width>=2160]+ba/bv*[height<=2160]+ba/bv*[width<=2160]+ba/bv*+ba/b\" -S \"res:2160,fps,vcodec:hevc:av01:h264,br,acodec:m4a\"";
+                        mergeArg = "--merge-output-format mp4";
+                    }
+                    else if (targetHeight >= 1440 || safeFormatId.IndexOf("1440", StringComparison.OrdinalIgnoreCase) >= 0 || safeFormatId.IndexOf("2k", StringComparison.OrdinalIgnoreCase) >= 0)
+                    {
+                        // 2K tier (supports both horizontal 2560x1440 and vertical 1440x2560 Reels)
+                        formatArg = "-f \"bv*[height>=1440]+ba/bv*[width>=1440]+ba/bv*[height<=1440]+ba/bv*[width<=1440]+ba/bv*+ba/b\" -S \"res:1440,fps,vcodec:hevc:av01:h264,br,acodec:m4a\"";
+                        mergeArg = "--merge-output-format mp4";
+                    }
+                    else if (targetHeight >= 1080 || safeFormatId.IndexOf("1080", StringComparison.OrdinalIgnoreCase) >= 0)
+                    {
+                        // 1080p Full HD tier
+                        formatArg = "-f \"bv*[height<=1080][height>=720]+ba/bv*[width<=1080][width>=720]+ba/bv*[height<=1080]+ba/bv*[width<=1080]+ba/bv*+ba/b\" -S \"res:1080,fps,br,acodec:m4a\"";
+                        mergeArg = "--merge-output-format mp4";
+                    }
+                    else if (targetHeight >= 720 || safeFormatId.IndexOf("720", StringComparison.OrdinalIgnoreCase) >= 0)
+                    {
+                        // 720p HD tier
+                        formatArg = "-f \"bv*[height<=720][height>=480]+ba/bv*[width<=720][width>=480]+ba/bv*[height<=720]+ba/bv*[width<=720]+ba/bv*+ba/b\" -S \"res:720,fps,br,acodec:m4a\"";
+                        mergeArg = "--merge-output-format mp4";
+                    }
+                    else if (targetHeight > 0)
+                    {
+                        formatArg = string.Format("-f \"bv*[height<={0}]+ba/bv*[width<={0}]+ba/b[height<={0}]/b[width<={0}]/bv*+ba/b\" -S \"res:{0},acodec:m4a\"", targetHeight);
+                        mergeArg = "--merge-output-format mp4";
+                    }
+                    else
+                    {
+                        // Specific DASH format ID requested from analyze list
+                        formatArg = string.Format("-f \"{0}[acodec!=none]/{0}+bestaudio[ext=m4a]/{0}+ba/bv*+ba/b\" -S \"res,acodec:m4a\"", safeFormatId);
+                        mergeArg = "--merge-output-format mp4";
+                    }
                 }
                 else if (isSocial && (string.IsNullOrEmpty(safeFormatId) || safeFormatId == "best"))
                 {
@@ -2370,14 +2416,14 @@ namespace TurboDownloader
                     if (isWebM)
                     {
                         formatArg = targetHeight > 0
-                            ? string.Format("-f \"bv*[height<={0}][ext=webm]+ba[ext=webm]/bv*[height<={0}]+ba/b[height<={0}]/bv*+ba/b\" -S \"res:{0},acodec:opus\"", targetHeight)
+                            ? string.Format("-f \"bv*[height<={0}][ext=webm]+ba[ext=webm]/bv*[width<={0}][ext=webm]+ba[ext=webm]/bv*[height<={0}]+ba/bv*[width<={0}]+ba/b[height<={0}]/bv*+ba/b\" -S \"res:{0},acodec:opus\"", targetHeight)
                             : "-f \"bv*[ext=webm]+ba[ext=webm]/bv*+ba/b\" -S \"res,acodec:opus\"";
                         mergeArg = "--merge-output-format webm";
                     }
                     else
                     {
                         formatArg = targetHeight > 0
-                            ? string.Format("-f \"bv*[height<={0}]+ba/b[height<={0}]/bv*+ba/b\" -S \"res:{0},acodec:m4a\"", targetHeight)
+                            ? string.Format("-f \"bv*[height<={0}]+ba/bv*[width<={0}]+ba/b[height<={0}]/bv*+ba/b\" -S \"res:{0},acodec:m4a\"", targetHeight)
                             : "-f \"bv*+ba/b\" -S \"res,acodec:m4a\"";
                         mergeArg = "--merge-output-format mp4";
                     }
@@ -2386,12 +2432,12 @@ namespace TurboDownloader
                 {
                     if (isWebM)
                     {
-                        formatArg = string.Format("-f \"bv*[height<={0}][ext=webm]+ba[ext=webm]/bv*[height<={0}]+ba/b[height<={0}]/bv*+ba/b\" -S \"res:{0},acodec:opus\"", targetHeight);
+                        formatArg = string.Format("-f \"bv*[height<={0}][ext=webm]+ba[ext=webm]/bv*[width<={0}][ext=webm]+ba[ext=webm]/bv*[height<={0}]+ba/bv*[width<={0}]+ba/b[height<={0}]/bv*+ba/b\" -S \"res:{0},acodec:opus\"", targetHeight);
                         mergeArg = "--merge-output-format webm";
                     }
                     else
                     {
-                        formatArg = string.Format("-f \"bv*[height<={0}]+ba/b[height<={0}]/bv*+ba/b\" -S \"res:{0},acodec:m4a\"", targetHeight);
+                        formatArg = string.Format("-f \"bv*[height<={0}]+ba/bv*[width<={0}]+ba/b[height<={0}]/bv*+ba/b\" -S \"res:{0},acodec:m4a\"", targetHeight);
                         mergeArg = "--merge-output-format mp4";
                     }
                 }
@@ -2401,14 +2447,14 @@ namespace TurboDownloader
                     if (isWebM)
                     {
                         formatArg = targetHeight > 0
-                            ? string.Format("-f \"{0}[acodec!=none]/{0}+bestaudio[ext=webm]/{0}+bestaudio[acodec=opus]/{0}+ba/bv*[height<={1}]+ba/bv*+ba/b\" -S \"res:{1},acodec:opus\"", safeFormatId, targetHeight)
+                            ? string.Format("-f \"{0}[acodec!=none]/{0}+bestaudio[ext=webm]/{0}+bestaudio[acodec=opus]/{0}+ba/bv*[height<={1}]+ba/bv*[width<={1}]+ba/bv*+ba/b\" -S \"res:{1},acodec:opus\"", safeFormatId, targetHeight)
                             : string.Format("-f \"{0}[acodec!=none]/{0}+bestaudio[ext=webm]/{0}+bestaudio[acodec=opus]/{0}+ba/bv*+ba/b\" -S \"res,acodec:opus\"", safeFormatId);
                         mergeArg = "--merge-output-format webm";
                     }
                     else
                     {
                         formatArg = targetHeight > 0
-                            ? string.Format("-f \"{0}[acodec!=none]/{0}+bestaudio[ext=m4a]/{0}+ba/bv*[height<={1}]+ba/bv*+ba/b\" -S \"res:{1},acodec:m4a\"", safeFormatId, targetHeight)
+                            ? string.Format("-f \"{0}[acodec!=none]/{0}+bestaudio[ext=m4a]/{0}+ba/bv*[height<={1}]+ba/bv*[width<={1}]+ba/bv*+ba/b\" -S \"res:{1},acodec:m4a\"", safeFormatId, targetHeight)
                             : string.Format("-f \"{0}[acodec!=none]/{0}+bestaudio[ext=m4a]/{0}+ba/bv*+ba/b\" -S \"res,acodec:m4a\"", safeFormatId);
                         mergeArg = "--merge-output-format mp4";
                     }
