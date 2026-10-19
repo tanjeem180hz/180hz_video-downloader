@@ -1,6 +1,6 @@
 @echo off
 echo ========================================================
-echo   Compiling 180Hz Downloader 2.1 (Clean Managed Build)...
+echo   Compiling 180Hz Downloader 2.3 (All-in-One Engine)...
 echo ========================================================
 set CSC=C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe
 
@@ -9,14 +9,14 @@ if not exist "%CSC%" (
     exit /b 1
 )
 
-"%CSC%" /target:winexe /optimize+ /win32icon:app.ico /win32manifest:app.manifest /r:System.dll,System.Core.dll,System.Drawing.dll,System.Windows.Forms.dll,System.Web.Extensions.dll /resource:app.ico,app.ico /resource:web\index.html,index.html /resource:web\styles.css,styles.css /resource:web\app.js,app.js /resource:web\version.json,version.json /resource:web\click.mp3,click.mp3 /out:"180Hz Downloader.exe" "TurboDownloader.cs"
+"%CSC%" /target:winexe /optimize+ /win32icon:app.ico /win32manifest:app.manifest /r:System.dll,System.Core.dll,System.Drawing.dll,System.Windows.Forms.dll,System.Web.Extensions.dll,System.IO.Compression.dll,System.IO.Compression.FileSystem.dll /resource:app.ico,app.ico /resource:web\index.html,index.html /resource:web\styles.css,styles.css /resource:web\app.js,app.js /resource:web\version.json,version.json /resource:web\click.mp3,click.mp3 /out:"180Hz Downloader.exe" "TurboDownloader.cs"
 if %ERRORLEVEL% NEQ 0 (
     echo BUILD FAILED for 180Hz Downloader.exe!
     exit /b 1
 )
 
 echo Compiling 180Hz Downloader Setup.exe...
-"%CSC%" /target:winexe /optimize+ /win32icon:setup.ico /win32manifest:app.manifest /r:System.dll,System.Core.dll,System.Drawing.dll,System.Windows.Forms.dll,System.Web.Extensions.dll /resource:app.ico,app.ico /resource:web\index.html,index.html /resource:web\styles.css,styles.css /resource:web\app.js,app.js /resource:web\version.json,version.json /resource:web\click.mp3,click.mp3 /out:"180Hz Downloader Setup.exe" "TurboDownloader.cs"
+"%CSC%" /target:winexe /optimize+ /win32icon:setup.ico /win32manifest:app.manifest /r:System.dll,System.Core.dll,System.Drawing.dll,System.Windows.Forms.dll,System.Web.Extensions.dll,System.IO.Compression.dll,System.IO.Compression.FileSystem.dll /resource:app.ico,app.ico /resource:web\index.html,index.html /resource:web\styles.css,styles.css /resource:web\app.js,app.js /resource:web\version.json,version.json /resource:web\click.mp3,click.mp3 /out:"180Hz Downloader Setup.exe" "TurboDownloader.cs"
 if %ERRORLEVEL% NEQ 0 (
     echo BUILD FAILED for 180Hz Downloader Setup.exe!
     exit /b 1

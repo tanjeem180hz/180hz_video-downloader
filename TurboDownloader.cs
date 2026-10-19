@@ -15,6 +15,7 @@ using System.Drawing;
 using System.Net.Sockets;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.IO.Compression;
 
 [assembly: AssemblyTitle("180Hz Downloader")]
 [assembly: AssemblyDescription("180Hz Studio High-Frame-Rate Desktop Media Utility")]
@@ -26,8 +27,8 @@ using System.Runtime.InteropServices;
 [assembly: AssemblyCulture("")]
 [assembly: ComVisible(false)]
 [assembly: Guid("8f4e2a10-5c7b-4d93-9b1e-3a2c6e8f1d42")]
-[assembly: AssemblyVersion("2.1.0.0")]
-[assembly: AssemblyFileVersion("2.1.0.0")]
+[assembly: AssemblyVersion("2.3.0.0")]
+[assembly: AssemblyFileVersion("2.3.0.0")]
 
 namespace TurboDownloader
 {
@@ -96,8 +97,8 @@ namespace TurboDownloader
         private static bool isDownloadingDeps = false;
         private static string depStatusMessage = "Ready";
 
-        private const string APP_VERSION = "2.2.0";
-        private const int APP_VERSION_CODE = 220;
+        private const string APP_VERSION = "2.3.0";
+        private const int APP_VERSION_CODE = 230;
         private const string GITHUB_RAW_BASE_URL = "https://raw.githubusercontent.com/tanjeem180hz/180hz_video-downloader/main";
         private const string GITHUB_VERSION_URL = "https://raw.githubusercontent.com/tanjeem180hz/180hz_video-downloader/main/web/version.json";
         private const string GITHUB_ROOT_VERSION_URL = "https://raw.githubusercontent.com/tanjeem180hz/180hz_video-downloader/main/version.json";
@@ -137,7 +138,7 @@ namespace TurboDownloader
             return null;
         }
 
-        private static bool DownloadFileWithFallback(string url, string targetPath)
+        private static bool DownloadFileWithProgress(string url, string targetPath, Action<int, long, long> progressCallback = null)
         {
             string tempFile = targetPath + ".tmp";
             try
@@ -147,8 +148,25 @@ namespace TurboDownloader
                 ServicePointManager.SecurityProtocol = (SecurityProtocolType)3072 | (SecurityProtocolType)768 | SecurityProtocolType.Tls;
                 using (WebClient wc = new WebClient())
                 {
-                    wc.Headers.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) 180HzDownloader/2.1");
-                    wc.DownloadFile(url, tempFile);
+                    wc.Headers.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) 180HzDownloader/2.3");
+                    if (progressCallback != null)
+                    {
+                        wc.DownloadProgressChanged += (s, e) =>
+                        {
+                            try { progressCallback(e.ProgressPercentage, e.BytesReceived, e.TotalBytesToReceive); } catch { }
+                        };
+                    }
+                    var syncEvent = new ManualResetEvent(false);
+                    Exception downloadEx = null;
+                    wc.DownloadFileCompleted += (s, e) =>
+                    {
+                        if (e.Error != null) downloadEx = e.Error;
+                        syncEvent.Set();
+                    };
+                    wc.DownloadFileAsync(new Uri(url), tempFile);
+                    syncEvent.WaitOne();
+                    if (downloadEx != null) throw downloadEx;
+
                     if (File.Exists(tempFile) && new FileInfo(tempFile).Length > 100000)
                     {
                         if (File.Exists(targetPath)) File.Delete(targetPath);
@@ -159,6 +177,203 @@ namespace TurboDownloader
             }
             catch { }
             return false;
+        }
+
+        private static bool DownloadFileWithFallback(string url, string targetPath)
+        {
+            return DownloadFileWithProgress(url, targetPath, null);
+        }
+
+        private static bool ExtractFFmpegFromZip(string zipPath, string targetExePath)
+        {
+            try
+            {
+                using (var archive = System.IO.Compression.ZipFile.OpenRead(zipPath))
+                {
+                    foreach (var entry in archive.Entries)
+                    {
+                        if (entry.Name.Equals("ffmpeg.exe", StringComparison.OrdinalIgnoreCase))
+                        {
+                            if (File.Exists(targetExePath)) File.Delete(targetExePath);
+                            entry.ExtractToFile(targetExePath, true);
+                            return true;
+                        }
+                    }
+                }
+            }
+            catch { }
+
+            // Secondary fallback extraction using Windows built-in tar.exe
+            try
+            {
+                string tempDir = Path.Combine(Path.GetTempPath(), "180hz_ffmpeg_ext_" + Guid.NewGuid().ToString("N"));
+                Directory.CreateDirectory(tempDir);
+                ProcessStartInfo psi = new ProcessStartInfo
+                {
+                    FileName = "tar.exe",
+                    Arguments = string.Format("-xf \"{0}\" -C \"{1}\"", zipPath, tempDir),
+                    CreateNoWindow = true,
+                    UseShellExecute = false
+                };
+                using (Process p = Process.Start(psi))
+                {
+                    if (p.WaitForExit(35000))
+                    {
+                        string[] matches = Directory.GetFiles(tempDir, "ffmpeg.exe", SearchOption.AllDirectories);
+                        if (matches.Length > 0 && File.Exists(matches[0]))
+                        {
+                            File.Copy(matches[0], targetExePath, true);
+                            try { Directory.Delete(tempDir, true); } catch { }
+                            return true;
+                        }
+                    }
+                }
+                try { Directory.Delete(tempDir, true); } catch { }
+            }
+            catch { }
+
+            return false;
+        }
+
+        private static void SetupYtDlpEngine(string sourceDir, string targetYtDlp, Action<int, string, string> progress = null)
+        {
+            string localSrc = Path.Combine(sourceDir ?? "", "yt-dlp.exe");
+            if (File.Exists(localSrc) && new FileInfo(localSrc).Length > 10000000)
+            {
+                if (progress != null) progress(50, "Configuring local yt-dlp engine...", "Instant copy from source folder");
+                try { File.Copy(localSrc, targetYtDlp, true); if (File.Exists(targetYtDlp)) return; } catch { }
+            }
+
+            if (File.Exists(targetYtDlp) && new FileInfo(targetYtDlp).Length > 10000000)
+            {
+                if (progress != null) progress(52, "yt-dlp engine is ready and verified.", targetYtDlp);
+                return;
+            }
+
+            if (progress != null) progress(42, "Downloading yt-dlp engine...", "Fetching latest nightly release from GitHub...");
+            string nightlyUrl = "https://github.com/yt-dlp/yt-dlp-nightly-builds/releases/latest/download/yt-dlp.exe";
+            bool ok = DownloadFileWithProgress(nightlyUrl, targetYtDlp, (pct, recv, total) =>
+            {
+                if (progress != null)
+                {
+                    int p = 42 + (int)(pct * 0.12);
+                    string mb = (recv / (1024.0 * 1024.0)).ToString("0.0") + " MB";
+                    string tot = total > 0 ? " / " + (total / (1024.0 * 1024.0)).ToString("0.0") + " MB" : "";
+                    progress(p, "Downloading yt-dlp (" + mb + tot + ")...", nightlyUrl);
+                }
+            });
+
+            if (!ok || !File.Exists(targetYtDlp))
+            {
+                string stableUrl = "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe";
+                DownloadFileWithProgress(stableUrl, targetYtDlp, (pct, recv, total) =>
+                {
+                    if (progress != null)
+                    {
+                        int p = 42 + (int)(pct * 0.12);
+                        progress(p, "Downloading yt-dlp (stable build)...", stableUrl);
+                    }
+                });
+            }
+        }
+
+        private static void SetupFFmpegEngine(string sourceDir, string targetFFmpeg, Action<int, string, string> progress = null)
+        {
+            string localSrc = Path.Combine(sourceDir ?? "", "ffmpeg.exe");
+            if (File.Exists(localSrc) && new FileInfo(localSrc).Length > 10000000)
+            {
+                if (progress != null) progress(75, "Configuring local FFmpeg media engine...", "Instant copy (" + (new FileInfo(localSrc).Length / (1024 * 1024)) + " MB)");
+                try { File.Copy(localSrc, targetFFmpeg, true); if (File.Exists(targetFFmpeg)) return; } catch { }
+            }
+
+            if (File.Exists(targetFFmpeg) && new FileInfo(targetFFmpeg).Length > 10000000)
+            {
+                if (progress != null) progress(80, "FFmpeg media engine is ready and verified.", targetFFmpeg);
+                return;
+            }
+
+            string sysF = FindSystemFFmpeg();
+            if (!string.IsNullOrEmpty(sysF) && File.Exists(sysF))
+            {
+                if (progress != null) progress(75, "Linking system FFmpeg media engine...", sysF);
+                try { File.Copy(sysF, targetFFmpeg, true); if (File.Exists(targetFFmpeg)) return; } catch { }
+            }
+
+            // Winget attempt
+            try
+            {
+                if (progress != null) progress(65, "Checking Windows Package Manager (winget)...", "Querying yt-dlp.FFmpeg package...");
+                ProcessStartInfo wpsi = new ProcessStartInfo
+                {
+                    FileName = "winget.exe",
+                    Arguments = "install --id yt-dlp.FFmpeg --accept-package-agreements --accept-source-agreements --silent",
+                    CreateNoWindow = true,
+                    UseShellExecute = false
+                };
+                using (Process wp = Process.Start(wpsi))
+                {
+                    if (wp.WaitForExit(45000))
+                    {
+                        string wf = FindSystemFFmpeg();
+                        if (!string.IsNullOrEmpty(wf) && File.Exists(wf))
+                        {
+                            File.Copy(wf, targetFFmpeg, true);
+                            if (File.Exists(targetFFmpeg))
+                            {
+                                if (progress != null) progress(82, "FFmpeg configured via Windows Package Manager.", targetFFmpeg);
+                                return;
+                            }
+                        }
+                    }
+                }
+            }
+            catch { }
+
+            // Direct Zip Download from GitHub / gyan.dev
+            if (progress != null) progress(68, "Downloading FFmpeg media engine package...", "Downloading zip archive from GitHub...");
+            string tempZip = Path.Combine(Path.GetTempPath(), "180hz_ffmpeg_setup_" + Guid.NewGuid().ToString("N") + ".zip");
+            try
+            {
+                string ffmpegZipUrl = "https://github.com/yt-dlp/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip";
+                bool downloaded = DownloadFileWithProgress(ffmpegZipUrl, tempZip, (pct, recv, total) =>
+                {
+                    if (progress != null)
+                    {
+                        int p = 68 + (int)(pct * 0.18);
+                        string mb = (recv / (1024.0 * 1024.0)).ToString("0.0") + " MB";
+                        string tot = total > 0 ? " / " + (total / (1024.0 * 1024.0)).ToString("0.0") + " MB" : "";
+                        progress(p, "Downloading FFmpeg engine (" + mb + tot + ")...", "Package: yt-dlp FFmpeg Builds");
+                    }
+                });
+
+                if (!downloaded || !File.Exists(tempZip))
+                {
+                    string fallbackZipUrl = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip";
+                    downloaded = DownloadFileWithProgress(fallbackZipUrl, tempZip, (pct, recv, total) =>
+                    {
+                        if (progress != null)
+                        {
+                            int p = 68 + (int)(pct * 0.18);
+                            progress(p, "Downloading FFmpeg fallback package...", "gyan.dev essentials");
+                        }
+                    });
+                }
+
+                if (File.Exists(tempZip))
+                {
+                    if (progress != null) progress(86, "Extracting FFmpeg executable...", "Unpacking ffmpeg.exe from archive...");
+                    ExtractFFmpegFromZip(tempZip, targetFFmpeg);
+                }
+            }
+            finally
+            {
+                try { if (File.Exists(tempZip)) File.Delete(tempZip); } catch { }
+            }
+
+            if (File.Exists(targetFFmpeg))
+            {
+                if (progress != null) progress(88, "FFmpeg media engine extracted and ready.", targetFFmpeg);
+            }
         }
 
         private static bool isUpdatingYtDlp = false;
@@ -207,8 +422,7 @@ namespace TurboDownloader
                     if (!File.Exists(ytdlpPath))
                     {
                         depStatusMessage = "Downloading extraction engine (yt-dlp)...";
-                        string ytdlpUrl = "https://github.com/yt-dlp/yt-dlp-nightly-builds/releases/latest/download/yt-dlp.exe";
-                        DownloadFileWithFallback(ytdlpUrl, ytdlpPath);
+                        SetupYtDlpEngine(appDir, ytdlpPath, (p, s, d) => { depStatusMessage = s; });
                     }
                     else
                     {
@@ -217,11 +431,8 @@ namespace TurboDownloader
 
                     if (!File.Exists(ffmpegPath))
                     {
-                        string sysFfmpeg = FindSystemFFmpeg();
-                        if (!string.IsNullOrEmpty(sysFfmpeg) && File.Exists(sysFfmpeg))
-                        {
-                            try { File.Copy(sysFfmpeg, ffmpegPath, true); } catch { }
-                        }
+                        depStatusMessage = "Configuring FFmpeg media engine...";
+                        SetupFFmpegEngine(appDir, ffmpegPath, (p, s, d) => { depStatusMessage = s; });
                     }
 
                     depStatusMessage = (File.Exists(ytdlpPath) && File.Exists(ffmpegPath)) ? "Ready" : "Partial";
@@ -844,6 +1055,364 @@ namespace TurboDownloader
             catch { }
         }
 
+        private static void CreateAppShortcuts(string targetExe, string workingDir)
+        {
+            try
+            {
+                Type shellType = Type.GetTypeFromCLSID(new Guid("72C24DD5-D70A-438B-8A42-98424B88AFB8"));
+                if (shellType == null) return;
+                object shell = Activator.CreateInstance(shellType);
+                if (shell == null) return;
+
+                string iconPath = Path.Combine(workingDir, "app.ico");
+                string iconSpec = File.Exists(iconPath) ? iconPath + ",0" : targetExe + ",0";
+
+                Action<string> makeLnk = (lnkPath) =>
+                {
+                    try
+                    {
+                        object sc = shellType.InvokeMember("CreateShortcut", BindingFlags.InvokeMethod, null, shell, new object[] { lnkPath });
+                        if (sc != null)
+                        {
+                            Type scType = sc.GetType();
+                            scType.InvokeMember("TargetPath", BindingFlags.SetProperty, null, sc, new object[] { targetExe });
+                            scType.InvokeMember("WorkingDirectory", BindingFlags.SetProperty, null, sc, new object[] { workingDir });
+                            scType.InvokeMember("Description", BindingFlags.SetProperty, null, sc, new object[] { "180Hz Downloader - Lossless 8K Media Engine" });
+                            scType.InvokeMember("IconLocation", BindingFlags.SetProperty, null, sc, new object[] { iconSpec });
+                            scType.InvokeMember("Save", BindingFlags.InvokeMethod, null, sc, null);
+                        }
+                    }
+                    catch { }
+                };
+
+                // Desktop shortcut
+                try
+                {
+                    string desktop = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
+                    if (!string.IsNullOrEmpty(desktop) && Directory.Exists(desktop))
+                    {
+                        makeLnk(Path.Combine(desktop, "180Hz Downloader.lnk"));
+                    }
+                }
+                catch { }
+
+                // Start Menu shortcut
+                try
+                {
+                    string startMenu = Environment.GetFolderPath(Environment.SpecialFolder.Programs);
+                    if (!string.IsNullOrEmpty(startMenu) && Directory.Exists(startMenu))
+                    {
+                        makeLnk(Path.Combine(startMenu, "180Hz Downloader.lnk"));
+                    }
+                }
+                catch { }
+            }
+            catch { }
+        }
+
+        private static void KillRunningAppProcesses()
+        {
+            try
+            {
+                int myPid = Process.GetCurrentProcess().Id;
+                string[] procNames = new string[] { "180Hz Downloader", "180HzDownloader", "TurboDownloader" };
+                foreach (string pName in procNames)
+                {
+                    try
+                    {
+                        foreach (Process p in Process.GetProcessesByName(pName))
+                        {
+                            if (p.Id != myPid)
+                            {
+                                try { p.Kill(); p.WaitForExit(2500); } catch { }
+                            }
+                        }
+                    }
+                    catch { }
+                }
+            }
+            catch { }
+        }
+
+        private static bool SafeCopyFileWithRetry(string source, string dest)
+        {
+            for (int retry = 0; retry < 15; retry++)
+            {
+                try
+                {
+                    if (File.Exists(dest))
+                    {
+                        string bak = dest + ".old";
+                        try { if (File.Exists(bak)) File.Delete(bak); } catch { }
+                        try { File.Move(dest, bak); } catch { }
+                    }
+                    File.Copy(source, dest, true);
+                    return true;
+                }
+                catch
+                {
+                    Thread.Sleep(250);
+                }
+            }
+            return false;
+        }
+
+        public class SetupProgressForm : Form
+        {
+            private Label lblTitle;
+            private Label lblSubtitle;
+            private Label lblStatus;
+            private Label lblDetail;
+            private ProgressBar progressBar;
+            private Label lblFooter;
+            private Panel pnlHeader;
+            private Panel pnlDivider;
+
+            public SetupProgressForm(Icon icon = null)
+            {
+                this.Text = "180Hz Downloader Setup";
+                this.Size = new Size(540, 275);
+                this.StartPosition = FormStartPosition.CenterScreen;
+                this.FormBorderStyle = FormBorderStyle.FixedDialog;
+                this.MaximizeBox = false;
+                this.MinimizeBox = false;
+                this.BackColor = Color.FromArgb(17, 18, 22);
+                this.ForeColor = Color.FromArgb(240, 240, 240);
+                this.ShowInTaskbar = true;
+                this.TopMost = false;
+                if (icon != null) this.Icon = icon;
+
+                pnlHeader = new Panel
+                {
+                    Dock = DockStyle.Top,
+                    Height = 65,
+                    BackColor = Color.FromArgb(24, 25, 30)
+                };
+
+                lblTitle = new Label
+                {
+                    Text = "⚡ 180Hz DOWNLOADER",
+                    Font = new Font("Segoe UI", 14.5f, FontStyle.Bold),
+                    ForeColor = Color.FromArgb(216, 255, 62),
+                    Location = new Point(20, 12),
+                    AutoSize = true
+                };
+
+                lblSubtitle = new Label
+                {
+                    Text = "All-In-One Setup: yt-dlp, FFmpeg & Full Studio Engine",
+                    Font = new Font("Segoe UI", 9.0f, FontStyle.Regular),
+                    ForeColor = Color.FromArgb(160, 165, 180),
+                    Location = new Point(22, 38),
+                    AutoSize = true
+                };
+
+                pnlDivider = new Panel
+                {
+                    Dock = DockStyle.Top,
+                    Height = 1,
+                    BackColor = Color.FromArgb(40, 42, 50)
+                };
+
+                lblStatus = new Label
+                {
+                    Text = "Initializing setup...",
+                    Font = new Font("Segoe UI", 9.5f, FontStyle.Bold),
+                    ForeColor = Color.FromArgb(245, 245, 245),
+                    Location = new Point(22, 85),
+                    Size = new Size(480, 20)
+                };
+
+                lblDetail = new Label
+                {
+                    Text = "Preparing application components...",
+                    Font = new Font("Segoe UI", 8.5f, FontStyle.Regular),
+                    ForeColor = Color.FromArgb(130, 135, 150),
+                    Location = new Point(22, 108),
+                    Size = new Size(480, 20)
+                };
+
+                progressBar = new ProgressBar
+                {
+                    Location = new Point(24, 138),
+                    Size = new Size(475, 22),
+                    Minimum = 0,
+                    Maximum = 100,
+                    Value = 0,
+                    Style = ProgressBarStyle.Continuous
+                };
+
+                lblFooter = new Label
+                {
+                    Text = "Lossless PEAK/8K Video · 320 kbps Studio Audio · GitHub Live Sync",
+                    Font = new Font("Segoe UI", 7.8f, FontStyle.Regular),
+                    ForeColor = Color.FromArgb(90, 95, 110),
+                    Location = new Point(24, 178),
+                    Size = new Size(475, 18),
+                    TextAlign = ContentAlignment.MiddleCenter
+                };
+
+                pnlHeader.Controls.Add(lblTitle);
+                pnlHeader.Controls.Add(lblSubtitle);
+                this.Controls.Add(lblFooter);
+                this.Controls.Add(progressBar);
+                this.Controls.Add(lblDetail);
+                this.Controls.Add(lblStatus);
+                this.Controls.Add(pnlDivider);
+                this.Controls.Add(pnlHeader);
+            }
+
+            public void UpdateProgress(int percent, string status, string detail = null)
+            {
+                if (this.IsDisposed) return;
+                if (this.InvokeRequired)
+                {
+                    try { this.BeginInvoke(new Action(() => UpdateProgress(percent, status, detail))); } catch { }
+                    return;
+                }
+                if (percent < 0) percent = 0;
+                if (percent > 100) percent = 100;
+                progressBar.Value = percent;
+                if (!string.IsNullOrEmpty(status)) lblStatus.Text = status;
+                if (detail != null) lblDetail.Text = detail;
+            }
+        }
+
+        private static void RunCompleteSetup(bool isSilent)
+        {
+            Action<int, string, string> progressAction = null;
+            SetupProgressForm form = null;
+
+            if (!isSilent)
+            {
+                Icon icon = null;
+                try
+                {
+                    string iconPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "app.ico");
+                    if (File.Exists(iconPath)) icon = new Icon(iconPath);
+                }
+                catch { }
+
+                form = new SetupProgressForm(icon);
+                progressAction = (pct, stat, det) =>
+                {
+                    if (form != null) form.UpdateProgress(pct, stat, det);
+                };
+
+                form.Shown += (s, ev) =>
+                {
+                    Task.Factory.StartNew(() =>
+                    {
+                        try
+                        {
+                            ExecuteCompleteSetup(progressAction);
+                            progressAction(100, "Setup Complete!", "Starting 180Hz Downloader...");
+                            Thread.Sleep(800);
+                            try { form.Invoke(new Action(() => form.Close())); } catch { }
+                        }
+                        catch (Exception ex)
+                        {
+                            MessageBox.Show("Setup encountered an issue: " + ex.Message, "180Hz Downloader Setup", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                            try { form.Invoke(new Action(() => form.Close())); } catch { }
+                        }
+                    });
+                };
+
+                Application.Run(form);
+            }
+            else
+            {
+                progressAction = (pct, stat, det) => { };
+                ExecuteCompleteSetup(progressAction);
+            }
+        }
+
+        private static void ExecuteCompleteSetup(Action<int, string, string> progress)
+        {
+            string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+            string installDir = Path.Combine(localAppData, "Programs", "180Hz Downloader");
+            string sourceExe = Application.ExecutablePath;
+            string sourceDir = AppDomain.CurrentDomain.BaseDirectory;
+            string installedExe = Path.Combine(installDir, "180Hz Downloader.exe");
+
+            progress(5, "Closing running instances...", "Releasing file locks...");
+            KillRunningAppProcesses();
+
+            progress(15, "Configuring program folder...", installDir);
+            if (!Directory.Exists(installDir)) Directory.CreateDirectory(installDir);
+
+            progress(25, "Installing core application...", "Copying 180Hz Downloader.exe...");
+            if (!string.Equals(Path.GetFullPath(sourceExe), Path.GetFullPath(installedExe), StringComparison.OrdinalIgnoreCase))
+            {
+                SafeCopyFileWithRetry(sourceExe, installedExe);
+            }
+
+            progress(35, "Extracting interface assets...", "Extracting studio web interface...");
+            EnsureEmbeddedWebAssets(installDir, true);
+
+            // Copy app.ico
+            try
+            {
+                string iconPath = Path.Combine(installDir, "app.ico");
+                ExtractEmbeddedResourceIfPresent("app.ico", iconPath);
+                string localIco = Path.Combine(sourceDir, "app.ico");
+                if (!File.Exists(iconPath) && File.Exists(localIco)) File.Copy(localIco, iconPath, true);
+            }
+            catch { }
+
+            // Copy cookies if present
+            try
+            {
+                string srcCookies = Path.Combine(sourceDir, "youtube_visitor_cookies.txt");
+                string dstCookies = Path.Combine(installDir, "youtube_visitor_cookies.txt");
+                if (File.Exists(srcCookies) && !File.Exists(dstCookies))
+                {
+                    File.Copy(srcCookies, dstCookies, true);
+                }
+            }
+            catch { }
+
+            // Media Engine 1: yt-dlp
+            string targetYtDlp = Path.Combine(installDir, "yt-dlp.exe");
+            progress(45, "Configuring media extraction engine (yt-dlp)...", "Checking yt-dlp executable...");
+            SetupYtDlpEngine(sourceDir, targetYtDlp, progress);
+
+            // Media Engine 2: FFmpeg
+            string targetFFmpeg = Path.Combine(installDir, "ffmpeg.exe");
+            progress(60, "Configuring FFmpeg media engine...", "Checking FFmpeg 8K/320k merger pipeline...");
+            SetupFFmpegEngine(sourceDir, targetFFmpeg, progress);
+
+            // Windows Shortcuts
+            progress(92, "Creating shortcuts...", "Configuring Desktop & Start Menu shortcuts...");
+            CreateAppShortcuts(installedExe, installDir);
+
+            progress(98, "Finalizing installation...", "Setting up environment...");
+            try
+            {
+                string installedCookies = Path.Combine(installDir, "youtube_visitor_cookies.txt");
+                if (!File.Exists(installedCookies))
+                {
+                    Task.Factory.StartNew(() => { EnsureYouTubeVisitorCookies(); });
+                }
+            }
+            catch { }
+
+            progress(100, "Setup completed successfully!", "Launching 180Hz Downloader...");
+
+            // Launch installed application
+            try
+            {
+                ProcessStartInfo psi = new ProcessStartInfo
+                {
+                    FileName = installedExe,
+                    WorkingDirectory = installDir,
+                    UseShellExecute = true
+                };
+                Process.Start(psi);
+            }
+            catch { }
+        }
+
         [STAThread]
         static void Main(string[] args)
         {
@@ -866,6 +1435,8 @@ namespace TurboDownloader
                 bool isRestartedFromUpdate = false;
                 bool isApplyUpdateArg = false;
                 string applyTargetExe = null;
+                bool isSilent = false;
+                bool isExplicitSetup = false;
                 if (args != null)
                 {
                     for (int i = 0; i < args.Length; i++)
@@ -882,6 +1453,17 @@ namespace TurboDownloader
                             {
                                 applyTargetExe = args[i + 1];
                             }
+                        }
+                        else if (string.Equals(a, "--silent", StringComparison.OrdinalIgnoreCase) ||
+                                 string.Equals(a, "--quiet", StringComparison.OrdinalIgnoreCase) ||
+                                 string.Equals(a, "-s", StringComparison.OrdinalIgnoreCase))
+                        {
+                            isSilent = true;
+                        }
+                        else if (string.Equals(a, "--setup", StringComparison.OrdinalIgnoreCase) ||
+                                 string.Equals(a, "--install", StringComparison.OrdinalIgnoreCase))
+                        {
+                            isExplicitSetup = true;
                         }
                     }
                 }
@@ -905,9 +1487,19 @@ namespace TurboDownloader
                 }
                 catch { }
 
-                if (isApplyUpdateArg ||
-                    currentExeName.IndexOf("Setup", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                    currentExeName.IndexOf("Update", StringComparison.OrdinalIgnoreCase) >= 0)
+                // Check for Setup / Installation execution
+                bool isSetupMode = !isApplyUpdateArg && (isExplicitSetup ||
+                                   currentExeName.IndexOf("Setup", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                                   currentExeName.IndexOf("Install", StringComparison.OrdinalIgnoreCase) >= 0);
+
+                if (isSetupMode)
+                {
+                    RunCompleteSetup(isSilent);
+                    return;
+                }
+
+                // Internal updater replacement routine (invoked by --apply-update)
+                if (isApplyUpdateArg || currentExeName.IndexOf("Update", StringComparison.OrdinalIgnoreCase) >= 0)
                 {
                     try
                     {
@@ -915,46 +1507,12 @@ namespace TurboDownloader
                         string installedExe = Path.Combine(installDir, "180Hz Downloader.exe");
 
                         // Terminate any running 180Hz Downloader instances so file locks are released
-                        int myPid = Process.GetCurrentProcess().Id;
-                        string[] procNames = new string[] { "180Hz Downloader", "180HzDownloader", "TurboDownloader" };
-                        foreach (string pName in procNames)
-                        {
-                            try
-                            {
-                                foreach (Process p in Process.GetProcessesByName(pName))
-                                {
-                                    if (p.Id != myPid)
-                                    {
-                                        try { p.Kill(); p.WaitForExit(2500); } catch { }
-                                    }
-                                }
-                            }
-                            catch { }
-                        }
+                        KillRunningAppProcesses();
 
                         if (!string.Equals(Path.GetFullPath(currentExe), Path.GetFullPath(installedExe), StringComparison.OrdinalIgnoreCase))
                         {
-                            for (int retry = 0; retry < 15; retry++)
-                            {
-                                try
-                                {
-                                    if (File.Exists(installedExe))
-                                    {
-                                        string bak = installedExe + ".old";
-                                        try { if (File.Exists(bak)) File.Delete(bak); } catch { }
-                                        try { File.Move(installedExe, bak); } catch { }
-                                    }
-                                    File.Copy(currentExe, installedExe, true);
-                                    break;
-                                }
-                                catch
-                                {
-                                    Thread.Sleep(250);
-                                }
-                            }
-
-                            // Only overwrite embedded web assets on fresh Setup, not when --apply-update already wrote latest GitHub web files
-                            EnsureEmbeddedWebAssets(installDir, !isApplyUpdateArg);
+                            SafeCopyFileWithRetry(currentExe, installedExe);
+                            EnsureEmbeddedWebAssets(installDir, false);
                         }
 
                         string launchExe = installedExe;
@@ -965,24 +1523,7 @@ namespace TurboDownloader
                                 if (!string.Equals(Path.GetFullPath(currentExe), Path.GetFullPath(applyTargetExe), StringComparison.OrdinalIgnoreCase) &&
                                     !string.Equals(Path.GetFullPath(installedExe), Path.GetFullPath(applyTargetExe), StringComparison.OrdinalIgnoreCase))
                                 {
-                                    for (int retry = 0; retry < 15; retry++)
-                                    {
-                                        try
-                                        {
-                                            if (File.Exists(applyTargetExe))
-                                            {
-                                                string bak = applyTargetExe + ".old";
-                                                try { if (File.Exists(bak)) File.Delete(bak); } catch { }
-                                                try { File.Move(applyTargetExe, bak); } catch { }
-                                            }
-                                            File.Copy(currentExe, applyTargetExe, true);
-                                            break;
-                                        }
-                                        catch
-                                        {
-                                            Thread.Sleep(250);
-                                        }
-                                    }
+                                    SafeCopyFileWithRetry(currentExe, applyTargetExe);
                                 }
                                 if (File.Exists(applyTargetExe)) launchExe = applyTargetExe;
                             }
@@ -994,10 +1535,7 @@ namespace TurboDownloader
                             ProcessStartInfo psi = new ProcessStartInfo();
                             psi.FileName = launchExe;
                             psi.WorkingDirectory = Path.GetDirectoryName(launchExe) ?? installDir;
-                            if (isApplyUpdateArg || currentExeName.IndexOf("Update", StringComparison.OrdinalIgnoreCase) >= 0)
-                            {
-                                psi.Arguments = "--restarted-from-update";
-                            }
+                            psi.Arguments = "--restarted-from-update";
                             psi.UseShellExecute = true;
                             Process.Start(psi);
                             return;

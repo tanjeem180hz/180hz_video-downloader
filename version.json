@@ -1,10 +1,10 @@
 {
-  "version": "2.2.0",
-  "versionCode": 220,
+  "version": "2.3.0",
+  "versionCode": 230,
   "minRequiredVersion": "2.2.0",
-  "releaseDate": "2026-10-13",
+  "releaseDate": "2026-10-20",
   "appName": "180Hz Downloader",
   "downloadUrl": "https://raw.githubusercontent.com/tanjeem180hz/180hz_video-downloader/main/180Hz%20Downloader%20Setup.exe",
   "githubUrl": "https://github.com/tanjeem180hz/180hz_video-downloader",
-  "changelog": "Added Custom Save Folder (This PC) with 1st-time prompt & persistence, plus dedicated App Auto-Update section with 100% live GitHub sync."
+  "changelog": "All-in-one Setup Installer: Automatically downloads and configures yt-dlp & FFmpeg 8K/Lossless engines, creates Desktop/Start Menu shortcuts, with zero technical hassle."
 }
