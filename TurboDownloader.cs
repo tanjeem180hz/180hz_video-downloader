@@ -1059,11 +1059,17 @@ namespace TurboDownloader
             {
                 string webDir = Path.Combine(baseDir, "web");
                 if (!Directory.Exists(webDir)) Directory.CreateDirectory(webDir);
-                string[] assets = new string[] { "index.html", "styles.css", "app.js", "version.json", "click.mp3" };
+                string[] assets = new string[] { 
+                    "index.html", "styles.css", "app.js", "version.json", "click.mp3",
+                    "favicon.ico", "app.ico", "app.png", "favicon-32x32.png", "icon-192.png", "icon-512.png", "manifest.json" 
+                };
                 foreach (string asset in assets)
                 {
                     string target = Path.Combine(webDir, asset);
-                    if (forceOverwrite || !File.Exists(target))
+                    bool shouldExtract = forceOverwrite || !File.Exists(target) ||
+                        asset == "manifest.json" || asset == "favicon.ico" || asset == "app.png" ||
+                        asset.StartsWith("icon-") || asset.StartsWith("favicon-");
+                    if (shouldExtract)
                     {
                         ExtractEmbeddedResourceIfPresent(asset, target);
                     }
@@ -1072,6 +1078,12 @@ namespace TurboDownloader
                 if (forceOverwrite || !File.Exists(icoTarget))
                 {
                     ExtractEmbeddedResourceIfPresent("app.ico", icoTarget);
+                }
+                string[] rootAssets = new string[] { "favicon.ico", "app.png", "favicon-32x32.png", "icon-192.png", "icon-512.png", "manifest.json" };
+                foreach (string ra in rootAssets)
+                {
+                    string rt = Path.Combine(baseDir, ra);
+                    ExtractEmbeddedResourceIfPresent(ra, rt);
                 }
             }
             catch { }
@@ -1616,13 +1628,17 @@ namespace TurboDownloader
             progress(35, "Extracting interface assets...", "Extracting studio web interface...");
             EnsureEmbeddedWebAssets(installDir, true);
 
-            // Copy app.ico
+            // Copy icons and manifest to installDir
             try
             {
-                string iconPath = Path.Combine(installDir, "app.ico");
-                ExtractEmbeddedResourceIfPresent("app.ico", iconPath);
-                string localIco = Path.Combine(sourceDir, "app.ico");
-                if (!File.Exists(iconPath) && File.Exists(localIco)) File.Copy(localIco, iconPath, true);
+                string[] iconFiles = new string[] { "app.ico", "favicon.ico", "app.png", "favicon-32x32.png", "icon-192.png", "icon-512.png", "manifest.json" };
+                foreach (string ic in iconFiles)
+                {
+                    string iconPath = Path.Combine(installDir, ic);
+                    ExtractEmbeddedResourceIfPresent(ic, iconPath);
+                    string localIco = Path.Combine(sourceDir, ic);
+                    if (!File.Exists(iconPath) && File.Exists(localIco)) File.Copy(localIco, iconPath, true);
+                }
             }
             catch { }
 
@@ -2143,9 +2159,12 @@ namespace TurboDownloader
             {
                 if (targetBrowser != null)
                 {
+                    string profileDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "180Hz Downloader", "profile");
+                    try { if (!Directory.Exists(profileDir)) Directory.CreateDirectory(profileDir); } catch { }
+
                     ProcessStartInfo psi = new ProcessStartInfo();
                     psi.FileName = targetBrowser;
-                    psi.Arguments = string.Format("--app=\"{0}\" --window-size=1120,820", appUrl);
+                    psi.Arguments = string.Format("--app=\"{0}\" --window-size=1120,820 --user-data-dir=\"{1}\" --no-first-run", appUrl, profileDir);
                     psi.UseShellExecute = true;
                     Process.Start(psi);
                 }
@@ -2272,6 +2291,34 @@ namespace TurboDownloader
                 else if (rawUrl == "/click.mp3")
                 {
                     ServeFile(res, GetWebFilePath("click.mp3"), "audio/mpeg", isHead);
+                }
+                else if (rawUrl == "/favicon.ico")
+                {
+                    ServeFile(res, GetWebFilePath("favicon.ico"), "image/x-icon", isHead);
+                }
+                else if (rawUrl == "/app.ico")
+                {
+                    ServeFile(res, GetWebFilePath("app.ico"), "image/x-icon", isHead);
+                }
+                else if (rawUrl == "/favicon-32x32.png")
+                {
+                    ServeFile(res, GetWebFilePath("favicon-32x32.png"), "image/png", isHead);
+                }
+                else if (rawUrl == "/app.png" || rawUrl == "/logo.png" || rawUrl == "/favicon.png")
+                {
+                    ServeFile(res, GetWebFilePath("app.png"), "image/png", isHead);
+                }
+                else if (rawUrl == "/icon-192.png")
+                {
+                    ServeFile(res, GetWebFilePath("icon-192.png"), "image/png", isHead);
+                }
+                else if (rawUrl == "/icon-512.png")
+                {
+                    ServeFile(res, GetWebFilePath("icon-512.png"), "image/png", isHead);
+                }
+                else if (rawUrl == "/manifest.json" || rawUrl == "/site.webmanifest")
+                {
+                    ServeFile(res, GetWebFilePath("manifest.json"), "application/manifest+json; charset=utf-8", isHead);
                 }
                 // FlowDown / PEAK/8K API endpoints
                 else if (rawUrl.StartsWith("/api/v1/media/analyze") && req.HttpMethod == "POST")
@@ -2608,6 +2655,8 @@ namespace TurboDownloader
                 case ".webm": return "video/webm";
                 case ".mkv": return "video/x-matroska";
                 case ".mp3": return "audio/mpeg";
+                case ".ico": return "image/x-icon";
+                case ".webmanifest": return "application/manifest+json; charset=utf-8";
                 case ".m4a": return "audio/mp4";
                 case ".opus": return "audio/opus";
                 case ".wav": return "audio/wav";

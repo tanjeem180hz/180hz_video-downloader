@@ -9,14 +9,14 @@ if not exist "%CSC%" (
     exit /b 1
 )
 
-"%CSC%" /target:winexe /optimize+ /win32icon:app.ico /win32manifest:app.manifest /r:System.dll,System.Core.dll,System.Drawing.dll,System.Windows.Forms.dll,System.Web.Extensions.dll,System.IO.Compression.dll,System.IO.Compression.FileSystem.dll /resource:app.ico,app.ico /resource:web\index.html,index.html /resource:web\styles.css,styles.css /resource:web\app.js,app.js /resource:web\version.json,version.json /resource:web\click.mp3,click.mp3 /out:"180Hz Downloader.exe" "TurboDownloader.cs"
+"%CSC%" /target:winexe /optimize+ /win32icon:app.ico /win32manifest:app.manifest /r:System.dll,System.Core.dll,System.Drawing.dll,System.Windows.Forms.dll,System.Web.Extensions.dll,System.IO.Compression.dll,System.IO.Compression.FileSystem.dll /resource:app.ico,app.ico /resource:web\index.html,index.html /resource:web\styles.css,styles.css /resource:web\app.js,app.js /resource:web\version.json,version.json /resource:web\click.mp3,click.mp3 /resource:web\favicon.ico,favicon.ico /resource:web\app.png,app.png /resource:web\favicon-32x32.png,favicon-32x32.png /resource:web\icon-192.png,icon-192.png /resource:web\icon-512.png,icon-512.png /resource:web\manifest.json,manifest.json /out:"180Hz Downloader.exe" "TurboDownloader.cs"
 if %ERRORLEVEL% NEQ 0 (
     echo BUILD FAILED for 180Hz Downloader.exe!
     exit /b 1
 )
 
 echo Compiling 180Hz Downloader Setup.exe...
-"%CSC%" /target:winexe /optimize+ /win32icon:setup.ico /win32manifest:app.manifest /r:System.dll,System.Core.dll,System.Drawing.dll,System.Windows.Forms.dll,System.Web.Extensions.dll,System.IO.Compression.dll,System.IO.Compression.FileSystem.dll /resource:app.ico,app.ico /resource:web\index.html,index.html /resource:web\styles.css,styles.css /resource:web\app.js,app.js /resource:web\version.json,version.json /resource:web\click.mp3,click.mp3 /out:"180Hz Downloader Setup.exe" "TurboDownloader.cs"
+"%CSC%" /target:winexe /optimize+ /win32icon:setup.ico /win32manifest:app.manifest /r:System.dll,System.Core.dll,System.Drawing.dll,System.Windows.Forms.dll,System.Web.Extensions.dll,System.IO.Compression.dll,System.IO.Compression.FileSystem.dll /resource:app.ico,app.ico /resource:web\index.html,index.html /resource:web\styles.css,styles.css /resource:web\app.js,app.js /resource:web\version.json,version.json /resource:web\click.mp3,click.mp3 /resource:web\favicon.ico,favicon.ico /resource:web\app.png,app.png /resource:web\favicon-32x32.png,favicon-32x32.png /resource:web\icon-192.png,icon-192.png /resource:web\icon-512.png,icon-512.png /resource:web\manifest.json,manifest.json /out:"180Hz Downloader Setup.exe" "TurboDownloader.cs"
 if %ERRORLEVEL% NEQ 0 (
     echo BUILD FAILED for 180Hz Downloader Setup.exe!
     exit /b 1
@@ -38,6 +38,16 @@ copy /Y "web\app.js" "docs\app.js" >nul
 copy /Y "web\version.json" "docs\version.json" >nul
 copy /Y "web\version.json" "version.json" >nul
 copy /Y "web\click.mp3" "docs\click.mp3" >nul
+copy /Y "web\favicon.ico" "docs\favicon.ico" >nul
+copy /Y "web\app.ico" "docs\app.ico" >nul
+copy /Y "web\app.png" "docs\app.png" >nul
+copy /Y "web\favicon-32x32.png" "docs\favicon-32x32.png" >nul
+copy /Y "web\icon-192.png" "docs\icon-192.png" >nul
+copy /Y "web\icon-512.png" "docs\icon-512.png" >nul
+copy /Y "web\manifest.json" "docs\manifest.json" >nul
+copy /Y "web\manifest.json" "manifest.json" >nul
+copy /Y "web\app.png" "app.png" >nul
+copy /Y "web\favicon.ico" "favicon.ico" >nul
 if exist "qjs.exe" (
     copy /Y "qjs.exe" "web\qjs.exe" >nul
     copy /Y "qjs.exe" "docs\qjs.exe" >nul

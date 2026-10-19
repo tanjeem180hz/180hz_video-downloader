@@ -50,12 +50,28 @@ namespace TurboDownloaderInstaller
             // Copy dependencies if present in installer folder
             try
             {
-                string[] depFiles = new string[] { "yt-dlp.exe", "ffmpeg.exe", "qjs.exe", "deno.exe", "yt-dlp.conf", "app.ico", "youtube_visitor_cookies.txt" };
+                string[] depFiles = new string[] { 
+                    "yt-dlp.exe", "ffmpeg.exe", "qjs.exe", "deno.exe", "yt-dlp.conf", 
+                    "app.ico", "favicon.ico", "app.png", "favicon-32x32.png", "icon-192.png", "icon-512.png", "manifest.json", 
+                    "youtube_visitor_cookies.txt" 
+                };
                 foreach (string dep in depFiles)
                 {
                     string src = Path.Combine(sourceDir, dep);
                     string dst = Path.Combine(installDir, dep);
                     if (File.Exists(src)) File.Copy(src, dst, true);
+                }
+
+                string srcWeb = Path.Combine(sourceDir, "web");
+                string dstWeb = Path.Combine(installDir, "web");
+                if (Directory.Exists(srcWeb))
+                {
+                    if (!Directory.Exists(dstWeb)) Directory.CreateDirectory(dstWeb);
+                    foreach (string f in Directory.GetFiles(srcWeb))
+                    {
+                        string fname = Path.GetFileName(f);
+                        File.Copy(f, Path.Combine(dstWeb, fname), true);
+                    }
                 }
             }
             catch { }

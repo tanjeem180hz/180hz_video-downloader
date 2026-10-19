@@ -1,6 +1,6 @@
 <p align="center">
   <a href="https://tanjeem180hz.github.io/180hz_video-downloader/">
-    <img src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=800&size=26&pause=1000&color=D8FF3E&center=true&vCenter=true&random=false&width=620&height=70&lines=%E2%9A%A1+180HZ+DOWNLOADER+2.3.1+%7C+PEAK+8K;%F0%9F%8E%AC+Bit-Exact+4K+%26+8K+Lossless+Video;%F0%9F%8E%B5+320+kbps+Studio+MP3+Audio+Pipeline;%F0%9F%9A%80+Controlled+YouTube%2C+Instagram%2C+Facebook;%F0%9F%9B%A1%EF%B8%8F+1-Click+Installer+%E2%80%94+Auto+FFmpeg%2C+yt-dlp+%26+JS+Runtime" alt="180Hz Downloader Typist Animation" />
+    <img src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=800&size=26&pause=1000&color=D8FF3E&center=true&vCenter=true&random=false&width=620&height=70&lines=%E2%9A%A1+180HZ+DOWNLOADER+2.3.2+%7C+PEAK+8K;%F0%9F%8E%AC+Bit-Exact+4K+%26+8K+Lossless+Video;%F0%9F%8E%B5+320+kbps+Studio+MP3+Audio+Pipeline;%F0%9F%9A%80+Controlled+YouTube%2C+Instagram%2C+Facebook;%F0%9F%9B%A1%EF%B8%8F+1-Click+Installer+%E2%80%94+Auto+FFmpeg%2C+yt-dlp+%26+JS+Runtime" alt="180Hz Downloader Typist Animation" />
   </a>
 </p>
 
@@ -21,7 +21,7 @@
   <a href="https://tanjeem180hz.github.io/180hz_video-downloader/">
     <img src="https://img.shields.io/badge/%F0%9F%8C%90_LIVE_WEBSITE-ONLINE_%26_ACTIVE-00f0ff?style=for-the-badge&logo=googlechrome&logoColor=white" alt="Live Website" />
   </a>
-  <img src="https://img.shields.io/badge/Version-v2.3.1-D8FF3E?style=for-the-badge&logo=git&logoColor=black" alt="Version 2.3.1" />
+  <img src="https://img.shields.io/badge/Version-v2.3.2-D8FF3E?style=for-the-badge&logo=git&logoColor=black" alt="Version 2.3.2" />
   <img src="https://img.shields.io/badge/Max_Quality-8K_4320p_HDR-ff0055?style=for-the-badge&logo=youtube&logoColor=white" alt="8K Resolution" />
   <img src="https://img.shields.io/badge/Audio-320_kbps_MP3-a855f7?style=for-the-badge&logo=audiomack&logoColor=white" alt="320 kbps MP3" />
   <img src="https://img.shields.io/badge/OS-Windows_10_%7C_11-0078d7?style=for-the-badge&logo=windows&logoColor=white" alt="Windows 10 / 11" />
