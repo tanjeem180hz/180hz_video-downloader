@@ -1,10 +1,10 @@
 {
-  "version": "2.3.0",
-  "versionCode": 230,
+  "version": "2.3.1",
+  "versionCode": 231,
   "minRequiredVersion": "2.2.0",
   "releaseDate": "2026-10-20",
   "appName": "180Hz Downloader",
   "downloadUrl": "https://raw.githubusercontent.com/tanjeem180hz/180hz_video-downloader/main/180Hz%20Downloader%20Setup.exe",
   "githubUrl": "https://github.com/tanjeem180hz/180hz_video-downloader",
-  "changelog": "All-in-one Setup Installer: Automatically downloads and configures yt-dlp & FFmpeg 8K/Lossless engines, creates Desktop/Start Menu shortcuts, with zero technical hassle."
+  "changelog": "Integrated automated JavaScript runtime engine (QuickJS / Deno) for yt-dlp EJS to eliminate YouTube HTTP 403 Forbidden errors, with automated setup installer and shortcuts."
 }

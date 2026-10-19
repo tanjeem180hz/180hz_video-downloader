@@ -184,7 +184,7 @@ namespace TurboDownloader
             return DownloadFileWithProgress(url, targetPath, null);
         }
 
-        private static bool ExtractFFmpegFromZip(string zipPath, string targetExePath)
+        private static bool ExtractExecutableFromZip(string zipPath, string targetExePath, string exeName)
         {
             try
             {
@@ -192,7 +192,7 @@ namespace TurboDownloader
                 {
                     foreach (var entry in archive.Entries)
                     {
-                        if (entry.Name.Equals("ffmpeg.exe", StringComparison.OrdinalIgnoreCase))
+                        if (entry.Name.Equals(exeName, StringComparison.OrdinalIgnoreCase))
                         {
                             if (File.Exists(targetExePath)) File.Delete(targetExePath);
                             entry.ExtractToFile(targetExePath, true);
@@ -206,7 +206,7 @@ namespace TurboDownloader
             // Secondary fallback extraction using Windows built-in tar.exe
             try
             {
-                string tempDir = Path.Combine(Path.GetTempPath(), "180hz_ffmpeg_ext_" + Guid.NewGuid().ToString("N"));
+                string tempDir = Path.Combine(Path.GetTempPath(), "180hz_ext_" + Guid.NewGuid().ToString("N"));
                 Directory.CreateDirectory(tempDir);
                 ProcessStartInfo psi = new ProcessStartInfo
                 {
@@ -219,7 +219,7 @@ namespace TurboDownloader
                 {
                     if (p.WaitForExit(35000))
                     {
-                        string[] matches = Directory.GetFiles(tempDir, "ffmpeg.exe", SearchOption.AllDirectories);
+                        string[] matches = Directory.GetFiles(tempDir, exeName, SearchOption.AllDirectories);
                         if (matches.Length > 0 && File.Exists(matches[0]))
                         {
                             File.Copy(matches[0], targetExePath, true);
@@ -233,6 +233,11 @@ namespace TurboDownloader
             catch { }
 
             return false;
+        }
+
+        private static bool ExtractFFmpegFromZip(string zipPath, string targetExePath)
+        {
+            return ExtractExecutableFromZip(zipPath, targetExePath, "ffmpeg.exe");
         }
 
         private static void SetupYtDlpEngine(string sourceDir, string targetYtDlp, Action<int, string, string> progress = null)
@@ -405,7 +410,7 @@ namespace TurboDownloader
 
         private static void EnsureDependencies()
         {
-            if (File.Exists(ytdlpPath) && File.Exists(ffmpegPath))
+            if (File.Exists(ytdlpPath) && File.Exists(ffmpegPath) && HasJsRuntime())
             {
                 depStatusMessage = "Ready";
                 CheckUpdateYtDlp();
@@ -435,7 +440,13 @@ namespace TurboDownloader
                         SetupFFmpegEngine(appDir, ffmpegPath, (p, s, d) => { depStatusMessage = s; });
                     }
 
-                    depStatusMessage = (File.Exists(ytdlpPath) && File.Exists(ffmpegPath)) ? "Ready" : "Partial";
+                    if (!HasJsRuntime())
+                    {
+                        depStatusMessage = "Configuring JavaScript runtime engine...";
+                        SetupJsRuntimeEngine(appDir, appDir, (p, s, d) => { depStatusMessage = s; });
+                    }
+
+                    depStatusMessage = (File.Exists(ytdlpPath) && File.Exists(ffmpegPath) && HasJsRuntime()) ? "Ready" : "Partial";
                 }
                 catch (Exception ex)
                 {
@@ -447,6 +458,79 @@ namespace TurboDownloader
                     isDownloadingDeps = false;
                 }
             });
+        }
+
+        private static string SearchPathForExecutable(string exeName)
+        {
+            try
+            {
+                string envPath = Environment.GetEnvironmentVariable("PATH");
+                if (!string.IsNullOrEmpty(envPath))
+                {
+                    foreach (string p in envPath.Split(';'))
+                    {
+                        if (string.IsNullOrEmpty(p)) continue;
+                        string full = Path.Combine(p.Trim(), exeName);
+                        if (File.Exists(full)) return full;
+                    }
+                }
+            }
+            catch { }
+            return null;
+        }
+
+        private static string FindQuickJsPath()
+        {
+            string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+            string[] candidates = new string[]
+            {
+                Path.Combine(appDir ?? "", "qjs.exe"),
+                Path.Combine(localAppData, @"Programs\180Hz Downloader\qjs.exe"),
+                Path.Combine(appDir ?? "", "quickjs.exe"),
+                Path.Combine(localAppData, @"Programs\180Hz Downloader\quickjs.exe"),
+                Path.Combine(localAppData, @"Microsoft\WinGet\Links\qjs.exe")
+            };
+            foreach (string c in candidates)
+            {
+                if (!string.IsNullOrEmpty(c) && File.Exists(c)) return c;
+            }
+            return SearchPathForExecutable("qjs.exe") ?? SearchPathForExecutable("quickjs.exe");
+        }
+
+        private static string FindDenoPath()
+        {
+            string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+            string userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            string[] candidates = new string[]
+            {
+                Path.Combine(appDir ?? "", "deno.exe"),
+                Path.Combine(localAppData, @"Programs\180Hz Downloader\deno.exe"),
+                Path.Combine(userProfile, @".deno\bin\deno.exe"),
+                Path.Combine(localAppData, @"Microsoft\WinGet\Links\deno.exe"),
+                @"C:\Program Files\deno\deno.exe"
+            };
+            foreach (string c in candidates)
+            {
+                if (!string.IsNullOrEmpty(c) && File.Exists(c)) return c;
+            }
+            return SearchPathForExecutable("deno.exe");
+        }
+
+        private static string FindBunPath()
+        {
+            string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+            string userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            string[] candidates = new string[]
+            {
+                Path.Combine(appDir ?? "", "bun.exe"),
+                Path.Combine(userProfile, @".bun\bin\bun.exe"),
+                Path.Combine(localAppData, @"Microsoft\WinGet\Links\bun.exe")
+            };
+            foreach (string c in candidates)
+            {
+                if (!string.IsNullOrEmpty(c) && File.Exists(c)) return c;
+            }
+            return SearchPathForExecutable("bun.exe");
         }
 
         private static string GetNodePath()
@@ -464,21 +548,203 @@ namespace TurboDownloader
             {
                 if (!string.IsNullOrEmpty(c) && File.Exists(c)) return c;
             }
+            return SearchPathForExecutable("node.exe");
+        }
+
+        private static bool HasJsRuntime()
+        {
+            return !string.IsNullOrEmpty(FindQuickJsPath()) ||
+                   !string.IsNullOrEmpty(FindDenoPath()) ||
+                   !string.IsNullOrEmpty(GetNodePath()) ||
+                   !string.IsNullOrEmpty(FindBunPath());
+        }
+
+        private static string GetJsRuntimeArg()
+        {
+            string qjs = FindQuickJsPath();
+            if (!string.IsNullOrEmpty(qjs) && File.Exists(qjs))
+            {
+                return string.Format("--js-runtimes quickjs:\"{0}\"", qjs);
+            }
+
+            string deno = FindDenoPath();
+            if (!string.IsNullOrEmpty(deno) && File.Exists(deno))
+            {
+                return string.Format("--js-runtimes deno:\"{0}\"", deno);
+            }
+
+            string node = GetNodePath();
+            if (!string.IsNullOrEmpty(node) && File.Exists(node))
+            {
+                return string.Format("--js-runtimes node:\"{0}\"", node);
+            }
+
+            string bun = FindBunPath();
+            if (!string.IsNullOrEmpty(bun) && File.Exists(bun))
+            {
+                return string.Format("--js-runtimes bun:\"{0}\"", bun);
+            }
+
+            return "";
+        }
+
+        private static void WriteYtDlpConfig(string dir, string runtimePath, string runtimeType)
+        {
             try
             {
-                string envPath = Environment.GetEnvironmentVariable("PATH");
-                if (!string.IsNullOrEmpty(envPath))
+                if (string.IsNullOrEmpty(dir) || !Directory.Exists(dir)) return;
+                string confPath = Path.Combine(dir, "yt-dlp.conf");
+                string relativeOrFullPath = runtimePath;
+                try
                 {
-                    foreach (string p in envPath.Split(';'))
+                    if (File.Exists(runtimePath) && string.Equals(Path.GetDirectoryName(Path.GetFullPath(runtimePath)), Path.GetFullPath(dir), StringComparison.OrdinalIgnoreCase))
                     {
-                        if (string.IsNullOrEmpty(p)) continue;
-                        string np = Path.Combine(p.Trim(), "node.exe");
-                        if (File.Exists(np)) return np;
+                        relativeOrFullPath = "./" + Path.GetFileName(runtimePath);
+                    }
+                }
+                catch { }
+
+                string configContent = string.Format("--js-runtimes {0}:\"{1}\"\r\n", runtimeType, relativeOrFullPath);
+                File.WriteAllText(confPath, configContent, Encoding.UTF8);
+            }
+            catch { }
+        }
+
+        private static void SetupJsRuntimeEngine(string sourceDir, string installDir, Action<int, string, string> progress = null)
+        {
+            string targetQjs = Path.Combine(installDir, "qjs.exe");
+            string targetDeno = Path.Combine(installDir, "deno.exe");
+
+            // 1. If target already has QuickJS or Deno verified
+            if (File.Exists(targetQjs) && new FileInfo(targetQjs).Length > 1000000)
+            {
+                if (progress != null) progress(82, "QuickJS JavaScript runtime is ready and verified.", targetQjs);
+                WriteYtDlpConfig(installDir, targetQjs, "quickjs");
+                return;
+            }
+            if (File.Exists(targetDeno) && new FileInfo(targetDeno).Length > 10000000)
+            {
+                if (progress != null) progress(82, "Deno JavaScript runtime is ready and verified.", targetDeno);
+                WriteYtDlpConfig(installDir, targetDeno, "deno");
+                return;
+            }
+
+            // 2. Local copy from source folder (qjs.exe preferred: 2.15 MB ultra-lightweight)
+            string localQjs = Path.Combine(sourceDir ?? "", "qjs.exe");
+            if (File.Exists(localQjs) && new FileInfo(localQjs).Length > 1000000)
+            {
+                if (progress != null) progress(78, "Configuring local QuickJS JavaScript runtime...", "Instant copy from installer package");
+                try
+                {
+                    File.Copy(localQjs, targetQjs, true);
+                    if (File.Exists(targetQjs))
+                    {
+                        WriteYtDlpConfig(installDir, targetQjs, "quickjs");
+                        return;
+                    }
+                }
+                catch { }
+            }
+
+            string localDeno = Path.Combine(sourceDir ?? "", "deno.exe");
+            if (File.Exists(localDeno) && new FileInfo(localDeno).Length > 10000000)
+            {
+                if (progress != null) progress(78, "Configuring local Deno JavaScript runtime...", "Instant copy from installer package");
+                try
+                {
+                    File.Copy(localDeno, targetDeno, true);
+                    if (File.Exists(targetDeno))
+                    {
+                        WriteYtDlpConfig(installDir, targetDeno, "deno");
+                        return;
+                    }
+                }
+                catch { }
+            }
+
+            // 3. Check system for QuickJS or Deno
+            string sysQjs = FindQuickJsPath();
+            if (!string.IsNullOrEmpty(sysQjs) && File.Exists(sysQjs))
+            {
+                if (progress != null) progress(80, "Linking system QuickJS runtime...", sysQjs);
+                try
+                {
+                    File.Copy(sysQjs, targetQjs, true);
+                    if (File.Exists(targetQjs))
+                    {
+                        WriteYtDlpConfig(installDir, targetQjs, "quickjs");
+                        return;
+                    }
+                }
+                catch { }
+            }
+
+            string sysDeno = FindDenoPath();
+            if (!string.IsNullOrEmpty(sysDeno) && File.Exists(sysDeno))
+            {
+                if (progress != null) progress(80, "Linking system Deno runtime...", sysDeno);
+                try
+                {
+                    File.Copy(sysDeno, targetDeno, true);
+                    if (File.Exists(targetDeno))
+                    {
+                        WriteYtDlpConfig(installDir, targetDeno, "deno");
+                        return;
+                    }
+                }
+                catch { }
+            }
+
+            // 4. Download QuickJS from official GitHub release (~2.15 MB, 1-2 seconds download)
+            if (progress != null) progress(76, "Downloading QuickJS runtime for YouTube...", "Fetching lightweight EJS challenge solver (~2 MB)...");
+            string qjsUrl = "https://github.com/quickjs-ng/quickjs/releases/download/v0.17.0/qjs-windows-x86_64.exe";
+            bool qjsOk = DownloadFileWithProgress(qjsUrl, targetQjs, (pct, recv, total) =>
+            {
+                if (progress != null)
+                {
+                    int p = 76 + (int)(pct * 0.08);
+                    string mb = (recv / (1024.0 * 1024.0)).ToString("0.0") + " MB";
+                    string tot = total > 0 ? " / " + (total / (1024.0 * 1024.0)).ToString("0.0") + " MB" : "";
+                    progress(p, "Downloading QuickJS (" + mb + tot + ")...", qjsUrl);
+                }
+            });
+
+            if (qjsOk && File.Exists(targetQjs))
+            {
+                if (progress != null) progress(84, "QuickJS runtime configured and ready.", targetQjs);
+                WriteYtDlpConfig(installDir, targetQjs, "quickjs");
+                return;
+            }
+
+            // 5. Fallback download: Deno
+            if (progress != null) progress(78, "Downloading Deno runtime package...", "Fetching official Deno runtime from GitHub...");
+            string tempDenoZip = Path.Combine(Path.GetTempPath(), "180hz_deno_setup_" + Guid.NewGuid().ToString("N") + ".zip");
+            try
+            {
+                string denoUrl = "https://github.com/denoland/deno/releases/latest/download/deno-x86_64-pc-windows-msvc.zip";
+                bool denoOk = DownloadFileWithProgress(denoUrl, tempDenoZip, (pct, recv, total) =>
+                {
+                    if (progress != null)
+                    {
+                        int p = 78 + (int)(pct * 0.08);
+                        progress(p, "Downloading Deno runtime...", denoUrl);
+                    }
+                });
+
+                if (File.Exists(tempDenoZip))
+                {
+                    if (progress != null) progress(84, "Extracting Deno executable...", "Unpacking deno.exe...");
+                    ExtractExecutableFromZip(tempDenoZip, targetDeno, "deno.exe");
+                    if (File.Exists(targetDeno))
+                    {
+                        WriteYtDlpConfig(installDir, targetDeno, "deno");
                     }
                 }
             }
-            catch { }
-            return null;
+            finally
+            {
+                try { if (File.Exists(tempDenoZip)) File.Delete(tempDenoZip); } catch { }
+            }
         }
 
         private static readonly object cookieLock = new object();
@@ -1374,13 +1640,17 @@ namespace TurboDownloader
 
             // Media Engine 1: yt-dlp
             string targetYtDlp = Path.Combine(installDir, "yt-dlp.exe");
-            progress(45, "Configuring media extraction engine (yt-dlp)...", "Checking yt-dlp executable...");
+            progress(42, "Configuring media extraction engine (yt-dlp)...", "Checking yt-dlp executable...");
             SetupYtDlpEngine(sourceDir, targetYtDlp, progress);
 
             // Media Engine 2: FFmpeg
             string targetFFmpeg = Path.Combine(installDir, "ffmpeg.exe");
-            progress(60, "Configuring FFmpeg media engine...", "Checking FFmpeg 8K/320k merger pipeline...");
+            progress(58, "Configuring FFmpeg media engine...", "Checking FFmpeg 8K/320k merger pipeline...");
             SetupFFmpegEngine(sourceDir, targetFFmpeg, progress);
+
+            // Media Engine 3: JavaScript Challenge Solver (QuickJS / Deno) for YouTube EJS
+            progress(75, "Configuring JavaScript runtime engine...", "Configuring YouTube EJS signature solver (QuickJS / Deno)...");
+            SetupJsRuntimeEngine(sourceDir, installDir, progress);
 
             // Windows Shortcuts
             progress(92, "Creating shortcuts...", "Configuring Desktop & Start Menu shortcuts...");
@@ -2392,8 +2662,7 @@ namespace TurboDownloader
             }
 
             bool isYouTube = safeUrl.IndexOf("youtube.com", StringComparison.OrdinalIgnoreCase) >= 0 || safeUrl.IndexOf("youtu.be", StringComparison.OrdinalIgnoreCase) >= 0;
-            string np = GetNodePath();
-            string jsRuntimeArg = !string.IsNullOrEmpty(np) ? string.Format("--js-runtimes node:\"{0}\"", np) : "";
+            string jsRuntimeArg = GetJsRuntimeArg();
             string userAgentArg = "--user-agent \"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36\"";
             string extArgs = userAgentArg;
             if (safeUrl.IndexOf("facebook.com", StringComparison.OrdinalIgnoreCase) >= 0 || safeUrl.IndexOf("fb.watch", StringComparison.OrdinalIgnoreCase) >= 0)
@@ -3003,8 +3272,7 @@ namespace TurboDownloader
             string effectiveSaveDir = GetEffectiveWritableSaveDir(saveDir);
             saveDir = effectiveSaveDir;
             string outTemplate = Path.Combine(effectiveSaveDir, "%(title)s.%(ext)s");
-            string np = GetNodePath();
-            string jsRuntimeArg = !string.IsNullOrEmpty(np) ? string.Format("--js-runtimes node:\"{0}\"", np) : "";
+            string jsRuntimeArg = GetJsRuntimeArg();
             string userAgentArg = "--user-agent \"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36\"";
             string extArgs = userAgentArg;
             if (isFacebook)

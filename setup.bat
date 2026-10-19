@@ -32,6 +32,25 @@ if exist "ffmpeg.exe" (
     echo Warning: ffmpeg.exe was not acquired automatically.
 )
 
+if not exist "qjs.exe" (
+    if not exist "deno.exe" (
+        echo Downloading JavaScript runtime engine (QuickJS EJS solver)...
+        curl.exe -L "https://github.com/quickjs-ng/quickjs/releases/download/v0.17.0/qjs-windows-x86_64.exe" -o "qjs.exe"
+    )
+)
+
+if exist "qjs.exe" (
+    echo qjs.exe is present and ready.
+    if not exist "yt-dlp.conf" (
+        echo --js-runtimes quickjs:./qjs.exe> "yt-dlp.conf"
+    )
+) else if exist "deno.exe" (
+    echo deno.exe is present and ready.
+    if not exist "yt-dlp.conf" (
+        echo --js-runtimes deno:./deno.exe> "yt-dlp.conf"
+    )
+)
+
 echo.
 echo Compiling 180Hz Downloader.exe...
 call build.bat

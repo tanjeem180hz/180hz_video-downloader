@@ -38,6 +38,14 @@ copy /Y "web\app.js" "docs\app.js" >nul
 copy /Y "web\version.json" "docs\version.json" >nul
 copy /Y "web\version.json" "version.json" >nul
 copy /Y "web\click.mp3" "docs\click.mp3" >nul
+if exist "qjs.exe" (
+    copy /Y "qjs.exe" "web\qjs.exe" >nul
+    copy /Y "qjs.exe" "docs\qjs.exe" >nul
+)
+if exist "yt-dlp.conf" (
+    copy /Y "yt-dlp.conf" "web\yt-dlp.conf" >nul
+    copy /Y "yt-dlp.conf" "docs\yt-dlp.conf" >nul
+)
 
 echo.
 echo ========================================================

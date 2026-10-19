@@ -50,7 +50,7 @@ namespace TurboDownloaderInstaller
             // Copy dependencies if present in installer folder
             try
             {
-                string[] depFiles = new string[] { "yt-dlp.exe", "ffmpeg.exe", "app.ico", "youtube_visitor_cookies.txt" };
+                string[] depFiles = new string[] { "yt-dlp.exe", "ffmpeg.exe", "qjs.exe", "deno.exe", "yt-dlp.conf", "app.ico", "youtube_visitor_cookies.txt" };
                 foreach (string dep in depFiles)
                 {
                     string src = Path.Combine(sourceDir, dep);
