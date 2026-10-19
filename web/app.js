@@ -2119,7 +2119,7 @@ async function triggerSaveAs(url, filename) {
       lampAudioVoice.load();
     } catch (e) {}
 
-    function playSynthesizedMechanicalClick(on) {
+    function playProfessionalStudioClick(on) {
       try {
         const AudioCtx = window.AudioContext || window.webkitAudioContext;
         if (!AudioCtx) return;
@@ -2129,65 +2129,51 @@ async function triggerSaveAs(url, filename) {
         }
         const now = ctx.currentTime;
 
-        // 1. Tactile Impact Transient (Crisp filtered mechanical friction snap)
-        const noiseDuration = 0.015;
-        const sampleRate = ctx.sampleRate || 44100;
-        const frameCount = Math.floor(sampleRate * noiseDuration);
-        const noiseBuffer = ctx.createBuffer(1, frameCount, sampleRate);
-        const channelData = noiseBuffer.getChannelData(0);
-        for (let i = 0; i < frameCount; i++) {
-          channelData[i] = (Math.random() * 2 - 1) * (1 - i / frameCount);
-        }
+        // 1. Crisp Soft Micro-Transient (subtle high-end tactile snap)
+        const oscTransient = ctx.createOscillator();
+        const gainTransient = ctx.createGain();
+        oscTransient.type = "sine";
+        oscTransient.frequency.setValueAtTime(on ? 1500 : 1200, now);
+        oscTransient.frequency.exponentialRampToValueAtTime(300, now + 0.014);
 
-        const noiseSource = ctx.createBufferSource();
-        noiseSource.buffer = noiseBuffer;
+        gainTransient.gain.setValueAtTime(0.24, now);
+        gainTransient.gain.exponentialRampToValueAtTime(0.0001, now + 0.014);
 
-        const noiseFilter = ctx.createBiquadFilter();
-        noiseFilter.type = "bandpass";
-        noiseFilter.frequency.setValueAtTime(on ? 2800 : 2200, now);
-        noiseFilter.Q.setValueAtTime(2.0, now);
+        oscTransient.connect(gainTransient);
+        gainTransient.connect(ctx.destination);
+        oscTransient.start(now);
+        oscTransient.stop(now + 0.016);
 
-        const noiseGain = ctx.createGain();
-        noiseGain.gain.setValueAtTime(0.38, now);
-        noiseGain.gain.exponentialRampToValueAtTime(0.001, now + noiseDuration);
+        // 2. Warm Studio Body Tone (smooth velvet switch acoustic resonance)
+        const oscBody = ctx.createOscillator();
+        const gainBody = ctx.createGain();
+        oscBody.type = "sine";
+        const baseFreq = on ? 523.25 : 440.0; // C5 for ON, A4 for OFF
+        oscBody.frequency.setValueAtTime(baseFreq, now);
+        oscBody.frequency.exponentialRampToValueAtTime(baseFreq * 0.8, now + 0.05);
 
-        noiseSource.connect(noiseFilter);
-        noiseFilter.connect(noiseGain);
-        noiseGain.connect(ctx.destination);
-        noiseSource.start(now);
+        gainBody.gain.setValueAtTime(0.18, now);
+        gainBody.gain.exponentialRampToValueAtTime(0.0001, now + 0.05);
 
-        // 2. Solid Body Thud (Realistic acoustic mechanical switch body)
-        const bodyOsc = ctx.createOscillator();
-        const bodyGain = ctx.createGain();
-        bodyOsc.type = "sine";
-        const startFreq = on ? 440 : 360;
-        const endFreq = on ? 110 : 85;
-        bodyOsc.frequency.setValueAtTime(startFreq, now);
-        bodyOsc.frequency.exponentialRampToValueAtTime(endFreq, now + 0.035);
+        oscBody.connect(gainBody);
+        gainBody.connect(ctx.destination);
+        oscBody.start(now);
+        oscBody.stop(now + 0.055);
 
-        bodyGain.gain.setValueAtTime(0.26, now);
-        bodyGain.gain.exponentialRampToValueAtTime(0.001, now + 0.035);
+        // 3. Subtle sub-tactile thumb tap (felt more than heard)
+        const oscThump = ctx.createOscillator();
+        const gainThump = ctx.createGain();
+        oscThump.type = "sine";
+        oscThump.frequency.setValueAtTime(110, now);
+        oscThump.frequency.exponentialRampToValueAtTime(50, now + 0.024);
 
-        bodyOsc.connect(bodyGain);
-        bodyGain.connect(ctx.destination);
-        bodyOsc.start(now);
-        bodyOsc.stop(now + 0.038);
+        gainThump.gain.setValueAtTime(0.20, now);
+        gainThump.gain.exponentialRampToValueAtTime(0.0001, now + 0.024);
 
-        // 3. Tactile Mechanical Latch Rebound (Detent settlement ~22ms later)
-        const reboundTime = now + 0.022;
-        const reboundOsc = ctx.createOscillator();
-        const reboundGain = ctx.createGain();
-        reboundOsc.type = "sine";
-        reboundOsc.frequency.setValueAtTime(on ? 680 : 540, reboundTime);
-        reboundOsc.frequency.exponentialRampToValueAtTime(130, reboundTime + 0.018);
-
-        reboundGain.gain.setValueAtTime(0.08, reboundTime);
-        reboundGain.gain.exponentialRampToValueAtTime(0.001, reboundTime + 0.018);
-
-        reboundOsc.connect(reboundGain);
-        reboundGain.connect(ctx.destination);
-        reboundOsc.start(reboundTime);
-        reboundOsc.stop(reboundTime + 0.022);
+        oscThump.connect(gainThump);
+        gainThump.connect(ctx.destination);
+        oscThump.start(now);
+        oscThump.stop(now + 0.026);
 
         // Clean up AudioContext lifecycle to prevent audio device leaks
         setTimeout(() => {
@@ -2196,14 +2182,14 @@ async function triggerSaveAs(url, filename) {
               ctx.close().catch(() => {});
             }
           } catch (e) {}
-        }, 150);
+        }, 120);
       } catch {}
     }
 
     function playLampSound(on) {
       try {
         if (!lampAudioVoice) {
-          lampAudioVoice = new Audio("click.mp3?v=3");
+          lampAudioVoice = new Audio("click.mp3?v=4");
           lampAudioVoice.preload = "auto";
         }
 
@@ -2212,11 +2198,11 @@ async function triggerSaveAs(url, filename) {
         const p = lampAudioVoice.play();
         if (p !== undefined) {
           p.catch(() => {
-            playSynthesizedMechanicalClick(on);
+            playProfessionalStudioClick(on);
           });
         }
       } catch (err) {
-        playSynthesizedMechanicalClick(on);
+        playProfessionalStudioClick(on);
       }
     }
 

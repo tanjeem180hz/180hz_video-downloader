@@ -1889,7 +1889,7 @@ namespace TurboDownloader
 
                     if (anotherIsRunning)
                     {
-                        LogTrace("Another instance is running. Exiting after LaunchNativeWindow.");
+                        LogTrace("Another instance is running. Checking health...");
                         int existingPort = 4000;
                         if (File.Exists(portFilePath))
                         {
@@ -1897,8 +1897,31 @@ namespace TurboDownloader
                             if (int.TryParse(File.ReadAllText(portFilePath).Trim(), out p) && p > 0)
                                 existingPort = p;
                         }
-                        LaunchNativeWindow(existingPort);
-                        return;
+
+                        bool isHealthy = false;
+                        try
+                        {
+                            HttpWebRequest hReq = (HttpWebRequest)WebRequest.Create(string.Format("http://127.0.0.1:{0}/api/v1/health", existingPort));
+                            hReq.Timeout = 1000;
+                            using (HttpWebResponse hRes = (HttpWebResponse)hReq.GetResponse())
+                            {
+                                if (hRes.StatusCode == HttpStatusCode.OK) isHealthy = true;
+                            }
+                        }
+                        catch { }
+
+                        if (isHealthy)
+                        {
+                            LogTrace("Existing instance is healthy. Bringing window up.");
+                            LaunchNativeWindow(existingPort);
+                            return;
+                        }
+                        else
+                        {
+                            LogTrace("Existing instance unresponsive. Terminating zombie instances.");
+                            KillRunningAppProcesses();
+                            Thread.Sleep(500);
+                        }
                     }
                 }
 
@@ -2144,38 +2167,56 @@ namespace TurboDownloader
 
         private static void LaunchNativeWindow(int targetPort)
         {
-            string edgePath1 = @"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe";
-            string edgePath2 = @"C:\Program Files\Microsoft\Edge\Application\msedge.exe";
-            string chromePath = @"C:\Program Files\Google\Chrome\Application\chrome.exe";
+            string appUrl = string.Format("http://127.0.0.1:{0}/", targetPort);
+
+            string[] candidateBrowsers = new string[]
+            {
+                @"C:\Program Files\Google\Chrome\Application\chrome.exe",
+                @"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), @"Google\Chrome\Application\chrome.exe"),
+                @"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+                @"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), @"Microsoft\Edge\Application\msedge.exe"),
+                @"C:\Program Files\BraveSoftware\Brave-Browser\Application\brave.exe",
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), @"BraveSoftware\Brave-Browser\Application\brave.exe")
+            };
 
             string targetBrowser = null;
-            if (File.Exists(edgePath1)) targetBrowser = edgePath1;
-            else if (File.Exists(edgePath2)) targetBrowser = edgePath2;
-            else if (File.Exists(chromePath)) targetBrowser = chromePath;
-
-            string appUrl = string.Format("http://127.0.0.1:{0}/", targetPort);
+            foreach (string b in candidateBrowsers)
+            {
+                if (!string.IsNullOrEmpty(b) && File.Exists(b))
+                {
+                    targetBrowser = b;
+                    break;
+                }
+            }
 
             try
             {
                 if (targetBrowser != null)
                 {
-                    string profileDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "180Hz Downloader", "profile");
-                    try { if (!Directory.Exists(profileDir)) Directory.CreateDirectory(profileDir); } catch { }
-
                     ProcessStartInfo psi = new ProcessStartInfo();
                     psi.FileName = targetBrowser;
-                    psi.Arguments = string.Format("--app=\"{0}\" --window-size=1120,820 --user-data-dir=\"{1}\" --no-first-run", appUrl, profileDir);
+                    psi.Arguments = string.Format("--app=\"{0}\" --window-size=1120,820", appUrl);
                     psi.UseShellExecute = true;
                     Process.Start(psi);
                 }
                 else
                 {
-                    Process.Start(appUrl);
+                    ProcessStartInfo psi = new ProcessStartInfo(appUrl);
+                    psi.UseShellExecute = true;
+                    Process.Start(psi);
                 }
             }
             catch
             {
-                try { Process.Start(appUrl); } catch { }
+                try
+                {
+                    ProcessStartInfo psi = new ProcessStartInfo(appUrl);
+                    psi.UseShellExecute = true;
+                    Process.Start(psi);
+                }
+                catch { }
             }
         }
 
