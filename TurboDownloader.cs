@@ -410,6 +410,18 @@ namespace TurboDownloader
 
         private static void EnsureDependencies()
         {
+            try
+            {
+                string jsPath = FindQuickJsPath();
+                string jsType = "quickjs";
+                if (string.IsNullOrEmpty(jsPath)) { jsPath = FindDenoPath(); jsType = "deno"; }
+                if (!string.IsNullOrEmpty(jsPath) && !string.IsNullOrEmpty(appDir))
+                {
+                    WriteYtDlpConfig(appDir, jsPath, jsType);
+                }
+            }
+            catch { }
+
             if (File.Exists(ytdlpPath) && File.Exists(ffmpegPath) && HasJsRuntime())
             {
                 depStatusMessage = "Ready";
@@ -604,7 +616,13 @@ namespace TurboDownloader
                 }
                 catch { }
 
-                string configContent = string.Format("--js-runtimes {0}:\"{1}\"\r\n", runtimeType, relativeOrFullPath);
+                string configContent = string.Format(
+                    "--js-runtimes {0}:\"{1}\"\r\n" +
+                    "--extractor-args \"youtube:player_client=android_vr,web_embedded,web_safari,android\"\r\n" +
+                    "--retries 10\r\n" +
+                    "--fragment-retries 10\r\n" +
+                    "--file-access-retries 5\r\n",
+                    runtimeType, relativeOrFullPath);
                 File.WriteAllText(confPath, configContent, Encoding.UTF8);
             }
             catch { }
@@ -2755,6 +2773,10 @@ namespace TurboDownloader
             string jsRuntimeArg = GetJsRuntimeArg();
             string userAgentArg = "--user-agent \"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36\"";
             string extArgs = userAgentArg;
+            if (isYouTube)
+            {
+                extArgs += " --extractor-args \"youtube:player_client=android_vr,web_embedded,web_safari,android\"";
+            }
             if (safeUrl.IndexOf("facebook.com", StringComparison.OrdinalIgnoreCase) >= 0 || safeUrl.IndexOf("fb.watch", StringComparison.OrdinalIgnoreCase) >= 0)
             {
                 extArgs += " --add-header \"Accept-Language:en-US,en;q=0.9\"";
@@ -2794,14 +2816,12 @@ namespace TurboDownloader
                     string err = "";
                     try { err = errTask.Wait(1000) ? errTask.Result : ""; } catch { }
 
-                    // If YouTube analysis returned empty (e.g. rate limit or stale session), retry with fresh visitor cookies and tv/web fallback
+                    // If YouTube analysis returned empty (e.g. rate limit or stale session), retry with resilient mobile/VR fallback
                     if (string.IsNullOrEmpty(output) && isYouTube)
                     {
                         try
                         {
-                            string freshCookies = EnsureYouTubeVisitorCookies(true);
-                            string freshCookiesArg = (freshCookies != null && File.Exists(freshCookies)) ? string.Format("--cookies \"{0}\"", freshCookies) : "";
-                            psi.Arguments = string.Format("{0} {1} --extractor-args \"youtube:player_client=tv,tv_embedded,web\" {2} --dump-json --no-playlist --no-warnings --socket-timeout 20 \"{3}\"", jsRuntimeArg, userAgentArg, freshCookiesArg, safeUrl);
+                            psi.Arguments = string.Format("{0} {1} --extractor-args \"youtube:player_client=android_vr,android\" --force-ipv4 --dump-json --no-playlist --no-warnings --socket-timeout 20 \"{2}\"", jsRuntimeArg, userAgentArg, safeUrl);
                             using (Process rp = Process.Start(psi))
                             {
                                 Task<string> rOut = Task.Factory.StartNew(() => rp.StandardOutput.ReadToEnd());
@@ -3365,6 +3385,10 @@ namespace TurboDownloader
             string jsRuntimeArg = GetJsRuntimeArg();
             string userAgentArg = "--user-agent \"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36\"";
             string extArgs = userAgentArg;
+            if (isYouTube)
+            {
+                extArgs += " --extractor-args \"youtube:player_client=android_vr,web_embedded,web_safari,android\" --retries 10 --fragment-retries 10";
+            }
             if (isFacebook)
             {
                 extArgs += " --add-header \"Accept-Language:en-US,en;q=0.9\"";
@@ -3518,19 +3542,26 @@ namespace TurboDownloader
                         catch { }
                     }
 
-                    // If YouTube anti-bot / HTTP 429 challenge triggered, retry with fresh visitor cookies and tv/web fallback
-                    if (err.IndexOf("Sign in to confirm", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                        err.IndexOf("bot", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                        err.IndexOf("HTTP Error 429", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                        err.IndexOf("PO Token", StringComparison.OrdinalIgnoreCase) >= 0)
+                    // If YouTube anti-bot / HTTP 403 Forbidden / HTTP 429 challenge triggered, retry with adaptive android/mobile client pipeline
+                    if (isYouTube && (err.IndexOf("HTTP Error 403", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                                     err.IndexOf("Forbidden", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                                     err.IndexOf("Sign in to confirm", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                                     err.IndexOf("bot", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                                     err.IndexOf("HTTP Error 429", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                                     err.IndexOf("PO Token", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                                     err.IndexOf("SABR", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                                     err.IndexOf("unable to download video data", StringComparison.OrdinalIgnoreCase) >= 0))
                     {
                         try
                         {
-                            string freshCookies = EnsureYouTubeVisitorCookies(true);
-                            string freshCookiesArg = (freshCookies != null && File.Exists(freshCookies)) ? string.Format("--cookies \"{0}\"", freshCookies) : cookiesArg;
-                            string fallbackClientArgs = userAgentArg + " --extractor-args \"youtube:player_client=tv,tv_embedded,web\"";
+                            LogTrace("Overcoming platform 403 stream limit... Retrying via resilient stream pipeline...");
+                            string fallbackClientArgs = userAgentArg + " --extractor-args \"youtube:player_client=android\" --force-ipv4";
+                            string retryFormatArg = (formatArg.Contains("+") || formatArg.StartsWith("-f \"bv*"))
+                                ? "-f \"bv*[height<=1080]+ba/bestvideo+bestaudio/best\" -S \"res:1080,acodec:m4a\""
+                                : formatArg;
+
                             string retryArgs = string.Format("{0} {1} {2} {3} {4} {5} --ffmpeg-location \"{6}\" --force-overwrites --newline --no-playlist --no-mtime --windows-filenames -o \"{7}\" \"{8}\"",
-                                jsRuntimeArg, fallbackClientArgs, freshCookiesArg, formatArg, mergeArg, faststartArg, ffmpeg, outTemplate, safeUrl);
+                                jsRuntimeArg, fallbackClientArgs, cookiesArg, retryFormatArg, mergeArg, faststartArg, ffmpeg, outTemplate, safeUrl);
 
                             errSb.Clear();
                             psi.Arguments = retryArgs;

@@ -438,6 +438,8 @@ async function triggerSaveAs(url, filename) {
     const lower = cause.toLowerCase();
     if (lower.includes("login") || lower.includes("cookie") || lower.includes("bot") || lower.includes("empty media response") || lower.includes("restricted")) {
       detailedExplanation = "This video or audio requires platform authentication, age verification, or is restricted by host security.";
+    } else if (lower.includes("403") || lower.includes("forbidden") || lower.includes("sabr")) {
+      detailedExplanation = "Platform streaming verification limit encountered. Click 'Retry Download' to automatically bypass via resilient mobile/VR stream.";
     } else if (lower.includes("private") || lower.includes("unavailable") || lower.includes("deleted") || lower.includes("not found") || lower.includes("404")) {
       detailedExplanation = "The media file is private, deleted, or has been removed from the host platform.";
     } else if (lower.includes("connect") || lower.includes("failed to fetch") || lower.includes("networkerror") || lower.includes("local engine") || lower.includes("4000")) {

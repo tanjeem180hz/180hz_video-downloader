@@ -1,10 +1,10 @@
 {
-  "version": "2.3.3",
-  "versionCode": 233,
+  "version": "2.3.4",
+  "versionCode": 234,
   "minRequiredVersion": "2.2.0",
   "releaseDate": "2026-10-20",
   "appName": "180Hz Downloader",
   "downloadUrl": "https://raw.githubusercontent.com/tanjeem180hz/180hz_video-downloader/main/180Hz%20Downloader%20Setup.exe",
   "githubUrl": "https://github.com/tanjeem180hz/180hz_video-downloader",
-  "changelog": "Instant window launch engine for Chrome/Edge/Brave, clean professional power-on button interface and studio audio sound."
+  "changelog": "Added multi-client VR/Android streaming pipeline to permanently prevent and bypass YouTube HTTP Error 403 Forbidden and SABR limitations."
 }
